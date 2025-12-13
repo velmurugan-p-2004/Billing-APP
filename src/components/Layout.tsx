@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
 import { LayoutDashboard, ShoppingCart, Package, Settings, History } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -14,8 +15,43 @@ const Layout = () => {
         { path: '/settings', icon: Settings, label: t('settings') },
     ];
 
+    const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+    useEffect(() => {
+        const handler = (e: any) => {
+            e.preventDefault();
+            setDeferredPrompt(e);
+        };
+        window.addEventListener('beforeinstallprompt', handler);
+        return () => window.removeEventListener('beforeinstallprompt', handler);
+    }, []);
+
+    const handleInstallClick = async () => {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === 'accepted') {
+            setDeferredPrompt(null);
+        }
+    };
+
     return (
         <div className="flex flex-col min-h-screen bg-slate-50">
+            {deferredPrompt && (
+                <div className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between shadow-md">
+                    <div className="flex flex-col">
+                        <span className="text-sm font-bold">Install App</span>
+                        <span className="text-xs text-blue-100">Add to home screen for offline use</span>
+                    </div>
+                    <button
+                        onClick={handleInstallClick}
+                        className="bg-white text-blue-600 text-xs font-bold px-3 py-1.5 rounded-full shadow hover:bg-blue-50 transition-colors"
+                    >
+                        Install
+                    </button>
+                </div>
+            )}
+
             <main className="flex-1 pb-20 overflow-y-auto">
                 <Outlet />
             </main>
