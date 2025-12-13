@@ -35,12 +35,9 @@ const Layout = () => {
         }
     };
 
-    // Only show custom install banner on mobile devices
-    const isMobile = typeof window !== 'undefined' ? window.innerWidth < 768 : false;
-
     return (
         <div className="flex flex-col min-h-screen bg-slate-50">
-            {deferredPrompt && isMobile && (
+            {deferredPrompt && (
                 <div className="bg-blue-600 text-white px-4 py-3 flex items-center justify-between shadow-md">
                     <div className="flex flex-col">
                         <span className="text-sm font-bold">Install App</span>
