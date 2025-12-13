@@ -7,6 +7,7 @@ import Inventory from './pages/Inventory';
 import Billing from './pages/Billing';
 import Dashboard from './pages/Dashboard';
 import HistoryPage from './pages/HistoryPage';
+import { InstallPWA } from './components/InstallPWA';
 import { WifiOff } from 'lucide-react';
 
 function App() {
@@ -33,6 +34,7 @@ function App() {
                     <span>You are offline. App working in offline mode.</span>
                 </div>
             )}
+            <InstallPWA />
             <Routes>
                 <Route path="/" element={<Layout />}>
                     <Route index element={<Dashboard />} />

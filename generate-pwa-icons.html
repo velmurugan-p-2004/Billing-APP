@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PWA Icon Generator</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px;
+            text-align: center;
+        }
+        canvas { 
+            border: 1px solid #ccc; 
+            margin: 10px;
+            display: none;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        .info {
+            margin: 20px;
+            padding: 20px;
+            background: #f0f9ff;
+            border-radius: 8px;
+            max-width: 600px;
+            margin: 20px auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>PWA Icon Generator for Seematti Billing</h1>
+    <div class="info">
+        <p>Click the button below to generate PWA icons with placeholder design.</p>
+        <p>Replace these with your actual logo later for production.</p>
+    </div>
+    <button onclick="generateIcons()">Generate All Icons</button>
+    <div id="status"></div>
+
+    <script>
+        function generateIcons() {
+            const sizes = [
+                { size: 64, filename: 'pwa-64x64.png' },
+                { size: 192, filename: 'pwa-192x192.png' },
+                { size: 512, filename: 'pwa-512x512.png' },
+                { size: 180, filename: 'apple-touch-icon.png' }
+            ];
+
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = '<h2>Generated Icons (Right-click to save):</h2>';
+
+            sizes.forEach(({ size, filename }) => {
+                const canvas = document.createElement('canvas');
+                canvas.width = size;
+                canvas.height = size;
+                const ctx = canvas.getContext('2d');
+
+                // Background gradient
+                const gradient = ctx.createLinearGradient(0, 0, size, size);
+                gradient.addColorStop(0, '#2563eb');
+                gradient.addColorStop(1, '#1e40af');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(0, 0, size, size);
+
+                // Add text
+                ctx.fillStyle = 'white';
+                ctx.font = `bold ${size * 0.15}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('Seematti', size / 2, size / 2 - size * 0.08);
+                
+                ctx.font = `${size * 0.1}px Arial`;
+                ctx.fillText('POS', size / 2, size / 2 + size * 0.08);
+
+                // Add border
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+                ctx.lineWidth = size * 0.02;
+                ctx.strokeRect(size * 0.05, size * 0.05, size * 0.9, size * 0.9);
+
+                // Create download link
+                const link = document.createElement('a');
+                link.download = filename;
+                link.href = canvas.toDataURL('image/png');
+                link.textContent = `Download ${filename} (${size}x${size})`;
+                link.style.display = 'block';
+                link.style.margin = '10px';
+                link.style.padding = '10px';
+                link.style.background = '#f0f0f0';
+                link.style.textDecoration = 'none';
+                link.style.color = '#333';
+                link.style.borderRadius = '5px';
+                
+                const img = document.createElement('img');
+                img.src = canvas.toDataURL('image/png');
+                img.style.width = '100px';
+                img.style.height = '100px';
+                img.style.verticalAlign = 'middle';
+                img.style.marginRight = '10px';
+                
+                const container = document.createElement('div');
+                container.style.display = 'inline-block';
+                container.style.margin = '10px';
+                container.appendChild(img);
+                container.appendChild(link);
+                
+                statusDiv.appendChild(container);
+            });
+
+            // Generate screenshots
+            generateScreenshots(statusDiv);
+        }
+
+        function generateScreenshots(statusDiv) {
+            // Mobile screenshot
+            const mobileCanvas = document.createElement('canvas');
+            mobileCanvas.width = 540;
+            mobileCanvas.height = 720;
+            let ctx = mobileCanvas.getContext('2d');
+            
+            // Background
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, 540, 720);
+            
+            // Header
+            ctx.fillStyle = '#2563eb';
+            ctx.fillRect(0, 0, 540, 80);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Seematti Billing', 270, 50);
+            
+            // Content placeholder
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillRect(20, 100, 500, 150);
+            ctx.fillRect(20, 270, 500, 150);
+            ctx.fillRect(20, 440, 500, 150);
+            
+            const mobileLink = document.createElement('a');
+            mobileLink.download = 'screenshot-mobile.png';
+            mobileLink.href = mobileCanvas.toDataURL('image/png');
+            mobileLink.textContent = 'Download screenshot-mobile.png (540x720)';
+            mobileLink.style.display = 'block';
+            mobileLink.style.margin = '10px';
+            mobileLink.style.padding = '10px';
+            mobileLink.style.background = '#f0f0f0';
+            mobileLink.style.textDecoration = 'none';
+            mobileLink.style.color = '#333';
+            mobileLink.style.borderRadius = '5px';
+            
+            const mobileImg = document.createElement('img');
+            mobileImg.src = mobileCanvas.toDataURL('image/png');
+            mobileImg.style.width = '100px';
+            mobileImg.style.height = '133px';
+            mobileImg.style.verticalAlign = 'middle';
+            mobileImg.style.marginRight = '10px';
+            
+            const mobileContainer = document.createElement('div');
+            mobileContainer.style.display = 'inline-block';
+            mobileContainer.style.margin = '10px';
+            mobileContainer.appendChild(mobileImg);
+            mobileContainer.appendChild(mobileLink);
+            statusDiv.appendChild(mobileContainer);
+            
+            // Desktop screenshot
+            const desktopCanvas = document.createElement('canvas');
+            desktopCanvas.width = 1280;
+            desktopCanvas.height = 720;
+            ctx = desktopCanvas.getContext('2d');
+            
+            // Background
+            ctx.fillStyle = '#f8fafc';
+            ctx.fillRect(0, 0, 1280, 720);
+            
+            // Header
+            ctx.fillStyle = '#2563eb';
+            ctx.fillRect(0, 0, 1280, 100);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 32px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Seematti Billing & Inventory', 640, 60);
+            
+            // Sidebar
+            ctx.fillStyle = '#1e293b';
+            ctx.fillRect(0, 100, 250, 620);
+            
+            // Content area
+            ctx.fillStyle = '#e2e8f0';
+            ctx.fillRect(280, 130, 970, 200);
+            ctx.fillRect(280, 360, 970, 200);
+            
+            const desktopLink = document.createElement('a');
+            desktopLink.download = 'screenshot-desktop.png';
+            desktopLink.href = desktopCanvas.toDataURL('image/png');
+            desktopLink.textContent = 'Download screenshot-desktop.png (1280x720)';
+            desktopLink.style.display = 'block';
+            desktopLink.style.margin = '10px';
+            desktopLink.style.padding = '10px';
+            desktopLink.style.background = '#f0f0f0';
+            desktopLink.style.textDecoration = 'none';
+            desktopLink.style.color = '#333';
+            desktopLink.style.borderRadius = '5px';
+            
+            const desktopImg = document.createElement('img');
+            desktopImg.src = desktopCanvas.toDataURL('image/png');
+            desktopImg.style.width = '177px';
+            desktopImg.style.height = '100px';
+            desktopImg.style.verticalAlign = 'middle';
+            desktopImg.style.marginRight = '10px';
+            
+            const desktopContainer = document.createElement('div');
+            desktopContainer.style.display = 'inline-block';
+            desktopContainer.style.margin = '10px';
+            desktopContainer.appendChild(desktopImg);
+            desktopContainer.appendChild(desktopLink);
+            statusDiv.appendChild(desktopContainer);
+        }
+    </script>
+</body>
+</html>
