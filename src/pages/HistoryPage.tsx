@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
+// import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db, Bill } from '@/db/db';
 import { Button } from '@/components/ui/button';
@@ -9,7 +9,7 @@ import { Search, FileText, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const HistoryPage = () => {
-    const { t } = useTranslation();
+    // const { t } = useTranslation(); // Unused
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
 

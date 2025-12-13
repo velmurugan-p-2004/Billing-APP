@@ -1,12 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
-import { db, Item, BillItem, Profile } from '@/db/db';
+import { db, Item, BillItem } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Minus, Trash2, ScanLine, Printer, QrCode } from 'lucide-react';
+import { Card } from '@/components/ui/card';
+import { Plus, Minus, Trash2, ScanLine } from 'lucide-react';
 import Scanner from '@/components/Scanner';
 import { QRCodeSVG } from 'qrcode.react';
 import PrintModal from '@/components/PrintModal';
@@ -153,7 +153,6 @@ const Billing = () => {
                 customerName,
                 items: cart,
                 totalAmount,
-                paymentMode,
                 paymentMode,
                 discount: discountType === 'amount' ? discount : (subTotal * discount / 100),
                 profileId: selectedProfileId || undefined

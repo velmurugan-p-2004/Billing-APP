@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db } from '@/db/db';
@@ -8,7 +8,7 @@ import { IndianRupee, Package, AlertTriangle, TrendingUp } from 'lucide-react';
 const Dashboard = () => {
     const { t } = useTranslation();
 
-    const [selectedProfileId, setSelectedProfileId] = React.useState<number | null>(
+    const [selectedProfileId, setSelectedProfileId] = useState<number | null>(
         Number(localStorage.getItem('defaultProfileId')) || null
     );
     const profiles = useLiveQuery(() => db.profiles.toArray());
@@ -18,14 +18,6 @@ const Dashboard = () => {
 
     if (!items || !bills) return <div className="p-4">Loading stats...</div>;
 
-    const filteredItems = items.filter(i =>
-        !selectedProfileId || i.profileId === selectedProfileId || !i.profileId // Include global/unassigned items? Or strict? 
-        // Logic: if profile selected, show only profile items. If item has no profile, maybe show it?
-        // Let's stick to strict: if profile selected, show matching. If !i.profileId, maybe it belongs to "Global"?
-        // For consistency with Billing search: (i.profileId === selectedProfileId || !i.profileId)
-    ).filter(i => selectedProfileId ? (i.profileId === selectedProfileId || !i.profileId) : true);
-
-    // Actually simpler:
     const activeItems = items.filter(i =>
         selectedProfileId ? (i.profileId === selectedProfileId || !i.profileId) : true
     );

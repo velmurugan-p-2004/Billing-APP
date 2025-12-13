@@ -1,12 +1,11 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db, Profile } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { clsx } from 'clsx';
-import { Plus, Trash2, Globe, Database, Printer, Edit2, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Trash2, Globe, Database, Printer, ArrowUp, ArrowDown } from 'lucide-react';
 import { compressImage } from '@/lib/imageUtils';
 
 const Settings = () => {
@@ -548,7 +547,7 @@ const BillLayoutEditor = () => {
 
     return (
         <div className="space-y-1 bg-slate-50 p-2 rounded">
-            {order.map((item, index) => (
+            {order.map((item: { id: string; label: string }, index: number) => (
                 <div key={item.id} className="flex items-center justify-between text-sm bg-white p-2 border rounded">
                     <span>{item.label}</span>
                     <div className="flex gap-1">

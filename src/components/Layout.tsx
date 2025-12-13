@@ -1,6 +1,5 @@
-import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Info, Settings, History } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Settings, History } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 

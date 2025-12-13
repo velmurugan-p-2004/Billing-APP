@@ -19,7 +19,7 @@ const Scanner: React.FC<ScannerProps> = ({ onScan, onClose }) => {
                 onScan(decodedText);
                 scanner.clear();
             },
-            (errorMessage) => {
+            (_errorMessage) => {
                 // parse error, ignore it.
             }
         );

@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useRef, Fragment } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db } from '@/db/db';
-import { cn } from '@/lib/utils';
+// import { cn } from '@/lib/utils';
 
 const PrintBill = () => {
     const { id } = useParams();
@@ -14,7 +14,7 @@ const PrintBill = () => {
     const profiles = useLiveQuery(() => db.profiles.toArray());
     const profile = profiles?.[0]; // Default profile
 
-    const hasPrinted = React.useRef(false);
+    const hasPrinted = useRef(false);
 
     useEffect(() => {
         if (bill && profile && autoPrint && !hasPrinted.current) {
@@ -133,9 +133,9 @@ const PrintBill = () => {
         return (
             <div className="w-[58mm] text-[12px] font-mono p-2 mx-auto bg-white">
                 {order.map((section: string) => (
-                    <React.Fragment key={section}>
+                    <Fragment key={section}>
                         {renderSection(section)}
-                    </React.Fragment>
+                    </Fragment>
                 ))}
             </div>
         );
