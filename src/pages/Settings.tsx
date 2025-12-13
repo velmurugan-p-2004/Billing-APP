@@ -346,6 +346,13 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
     const [showSignInModal, setShowSignInModal] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
 
+    useEffect(() => {
+        const savedUser = localStorage.getItem('google_user_info');
+        if (savedUser) {
+            setGoogleUser(JSON.parse(savedUser));
+        }
+    }, []);
+
     const handleGoogleSignIn = () => {
         setIsLoading(true);
         try {
@@ -361,14 +368,16 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
                                 headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
                             });
                             const user = await res.json();
-                            setGoogleUser({
+                            const userData = {
                                 email: user.email,
                                 name: user.name,
                                 picture: user.picture
-                            });
+                            };
+                            setGoogleUser(userData);
 
-                            // Save access token for later use (e.g. upload)
+                            // Save persistence data
                             localStorage.setItem('google_access_token', tokenResponse.access_token);
+                            localStorage.setItem('google_user_info', JSON.stringify(userData));
 
                             setShowSignInModal(false);
                         } catch (err) {
@@ -428,6 +437,7 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
                         <Button variant="ghost" size="sm" onClick={() => {
                             setGoogleUser(null);
                             localStorage.removeItem('google_access_token');
+                            localStorage.removeItem('google_user_info');
                         }} className="text-red-500 hover:text-red-600">
                             Disconnect
                         </Button>
