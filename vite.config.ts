@@ -15,6 +15,11 @@ export default defineConfig({
         short_name: 'Seematti POS',
         description: 'Offline-First Billing & Inventory Management',
         theme_color: '#ffffff',
+        background_color: '#ffffff',
+        display: 'standalone',
+        orientation: 'portrait',
+        start_url: '/',
+        scope: '/',
         icons: [
           {
             src: 'pwa-192x192.png',
