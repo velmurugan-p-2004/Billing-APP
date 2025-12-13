@@ -27,13 +27,15 @@ export const InstallPWA: React.FC = () => {
 
     // Listen for the beforeinstallprompt event
     const handleBeforeInstallPrompt = (e: Event) => {
+      console.log('✅ PWA Install prompt ready!');
       e.preventDefault();
       setDeferredPrompt(e as BeforeInstallPromptEvent);
       
-      // Show install prompt after a delay (optional)
+      // Show install prompt immediately for better visibility
       setTimeout(() => {
         setShowInstallPrompt(true);
-      }, 3000);
+        console.log('📱 Showing install banner');
+      }, 1000);
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
