@@ -316,6 +316,39 @@ const Settings = () => {
                 </CardContent>
             </Card>
 
+            {/* App Info Section */}
+            <Card>
+                <CardHeader className="pb-2">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                        <div className="w-5 h-5 bg-blue-600 rounded-sm flex items-center justify-center text-white text-xs font-bold">S</div>
+                        {t('app_info')}
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="p-3 bg-slate-50 border rounded-lg text-sm space-y-2">
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Version</span>
+                            <span className="font-medium">1.0.0</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-gray-500">Mode</span>
+                            <span className={`font-medium ${window.matchMedia('(display-mode: standalone)').matches ? 'text-green-600' : 'text-orange-600'}`}>
+                                {window.matchMedia('(display-mode: standalone)').matches ? 'Installed App' : 'Browser Mode'}
+                            </span>
+                        </div>
+                        {!window.matchMedia('(display-mode: standalone)').matches && (
+                            <div className="pt-2 border-t">
+                                <p className="text-xs text-gray-500 mb-1">Installation:</p>
+                                <p className="text-xs">
+                                    If the "Install App" banner is not visible at the top,
+                                    tap your browser menu <span className="font-bold">(⋮)</span> and select <span className="font-bold">"Add to Home Screen"</span> or <span className="font-bold">"Install App"</span>.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                </CardContent>
+            </Card>
+
             {/* Data Section */}
             <Card>
                 <CardHeader className="pb-2">
