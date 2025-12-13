@@ -96,13 +96,33 @@ const Billing = () => {
     };
 
     const handlePriceChange = (id: number, newPrice: string) => {
+        // Allow empty string to let user clear input
+        if (newPrice === '') {
+            setCart(prev => prev.map(item => item.id === id ? { ...item, price: 0 } : item));
+            return;
+        }
         const price = parseFloat(newPrice);
-        if (isNaN(price) || price < 0) return;
+        if (isNaN(price)) return; // Allow negative? Probably not.
 
         setCart(prev => prev.map(item =>
             item.id === id ? { ...item, price } : item
         ));
     };
+
+    const handleMrpChange = (id: number, newMrp: string) => {
+        if (newMrp === '') {
+            setCart(prev => prev.map(item => item.id === id ? { ...item, mrp: 0 } : item));
+            return;
+        }
+        const mrp = parseFloat(newMrp);
+        if (isNaN(mrp)) return;
+
+        setCart(prev => prev.map(item =>
+            item.id === id ? { ...item, mrp } : item
+        ));
+    };
+
+
 
     const location = useLocation();
     const [editingBillId, setEditingBillId] = useState<number | null>(null);
@@ -259,14 +279,25 @@ const Billing = () => {
                             </div>
 
                             <div className="flex justify-between items-center gap-2">
-                                <div className="flex items-center gap-1">
-                                    <span className="text-sm text-gray-500">Price: ₹</span>
-                                    <Input
-                                        type="number"
-                                        className="h-7 w-20 px-1 py-0 text-right"
-                                        value={item.price}
-                                        onChange={(e) => handlePriceChange(item.id!, e.target.value)}
-                                    />
+                                <div className="flex flex-col gap-1 items-end">
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-xs font-bold text-gray-500 w-8 text-right">MRP</span>
+                                        <Input
+                                            type="number"
+                                            className="h-7 w-20 px-1 py-0 text-right font-bold"
+                                            value={item.mrp || ''}
+                                            onChange={(e) => handleMrpChange(item.id!, e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        <span className="text-xs font-bold text-gray-500 w-8 text-right">Price</span>
+                                        <Input
+                                            type="number"
+                                            className="h-7 w-20 px-1 py-0 text-right font-bold"
+                                            value={item.price || ''}
+                                            onChange={(e) => handlePriceChange(item.id!, e.target.value)}
+                                        />
+                                    </div>
                                 </div>
 
                                 <div className="flex items-center gap-2">

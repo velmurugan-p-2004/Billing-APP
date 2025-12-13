@@ -53,10 +53,11 @@ const Inventory = () => {
             return;
         }
 
-        if (!formData.price || Number(formData.price) <= 0) {
+        // Price validation removed to allow zero-price items (updated at billing)
+        /* if (!formData.price || Number(formData.price) <= 0) {
             alert('Please enter a valid price');
             return;
-        }
+        } */
 
         try {
             if (editingId) {
