@@ -1,0 +1,22 @@
+{
+    "app_title": "Seematti Billing",
+    "dashboard": "Dashboard",
+    "billing": "Billing",
+    "inventory": "Inventory",
+    "history": "History",
+    "settings": "Settings",
+    "items": "Items",
+    "add_item": "Add Item",
+    "save": "Save",
+    "cancel": "Cancel",
+    "name": "Name",
+    "price": "Price",
+    "stock": "Stock",
+    "scan_barcode": "Scan Barcode",
+    "cart": "Cart",
+    "total": "Total",
+    "checkout": "Checkout",
+    "profile": "Profile",
+    "language": "Language",
+    "backup_restore": "Backup & Restore"
+}
