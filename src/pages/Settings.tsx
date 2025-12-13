@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db, Profile } from '@/db/db';
@@ -347,16 +347,51 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
     const [isLoading, setIsLoading] = useState(false);
 
     useEffect(() => {
-        const savedUser = localStorage.getItem('google_user_info');
-        if (savedUser) {
-            setGoogleUser(JSON.parse(savedUser));
-        }
+        const checkAuth = async () => {
+            const savedUser = localStorage.getItem('google_user_info');
+            const accessToken = localStorage.getItem('google_access_token');
+
+            if (savedUser) {
+                try {
+                    setGoogleUser(JSON.parse(savedUser));
+                    return;
+                } catch (e) {
+                    console.error("Failed to parse saved user info", e);
+                    localStorage.removeItem('google_user_info');
+                }
+            }
+
+            // Self-healing: If user info missing/bad but token exists, try to fetch it
+            if (accessToken) {
+                try {
+                    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                        headers: { Authorization: `Bearer ${accessToken}` }
+                    });
+                    if (res.ok) {
+                        const user = await res.json();
+                        const userData = {
+                            email: user.email,
+                            name: user.name,
+                            picture: user.picture
+                        };
+                        setGoogleUser(userData);
+                        localStorage.setItem('google_user_info', JSON.stringify(userData));
+                    } else {
+                        // Token likely expired
+                        localStorage.removeItem('google_access_token');
+                    }
+                } catch (err) {
+                    console.error("Failed to restore session from token", err);
+                }
+            }
+        };
+
+        checkAuth();
     }, []);
 
     const handleGoogleSignIn = () => {
         setIsLoading(true);
         try {
-            // @ts-ignore
             const client = google.accounts.oauth2.initTokenClient({
                 client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
                 scope: 'https://www.googleapis.com/auth/drive.file email profile',
