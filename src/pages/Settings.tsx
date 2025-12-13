@@ -351,9 +351,12 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
             const savedUser = localStorage.getItem('google_user_info');
             const accessToken = localStorage.getItem('google_access_token');
 
+            console.log('Checking Auth State:', { savedUser: !!savedUser, accessToken: !!accessToken });
+
             if (savedUser) {
                 try {
                     setGoogleUser(JSON.parse(savedUser));
+                    console.log('Restored user from localStorage');
                     return;
                 } catch (e) {
                     console.error("Failed to parse saved user info", e);
@@ -363,6 +366,7 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
 
             // Self-healing: If user info missing/bad but token exists, try to fetch it
             if (accessToken) {
+                console.log('Attempting self-healing using token...');
                 try {
                     const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                         headers: { Authorization: `Bearer ${accessToken}` }
@@ -376,8 +380,10 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
                         };
                         setGoogleUser(userData);
                         localStorage.setItem('google_user_info', JSON.stringify(userData));
+                        console.log('Self-healing successful');
                     } else {
                         // Token likely expired
+                        console.warn('Token invalid, clearing storage');
                         localStorage.removeItem('google_access_token');
                     }
                 } catch (err) {
@@ -391,11 +397,13 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
 
     const handleGoogleSignIn = () => {
         setIsLoading(true);
+        console.log('Initiating Google Sign In...');
         try {
             const client = google.accounts.oauth2.initTokenClient({
                 client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
                 scope: 'https://www.googleapis.com/auth/drive.file email profile',
                 callback: async (tokenResponse: any) => {
+                    console.log('Token response received', tokenResponse);
                     if (tokenResponse && tokenResponse.access_token) {
                         try {
                             // Fetch User Profile
@@ -408,11 +416,14 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
                                 name: user.name,
                                 picture: user.picture
                             };
+                            console.log('User info fetched', userData);
+
                             setGoogleUser(userData);
 
                             // Save persistence data
                             localStorage.setItem('google_access_token', tokenResponse.access_token);
                             localStorage.setItem('google_user_info', JSON.stringify(userData));
+                            console.log('Detailed saved to localStorage');
 
                             setShowSignInModal(false);
                         } catch (err) {
@@ -462,7 +473,11 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
                     <div className="flex items-center justify-between p-3 bg-blue-50 text-blue-800 rounded-lg">
                         <div className="flex items-center gap-2">
                             <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center font-bold text-xs overflow-hidden">
-                                {googleUser.picture ? <img src={googleUser.picture} referrerPolicy="no-referrer" /> : googleUser.name[0]}
+                                {googleUser.picture ? (
+                                    <img src={googleUser.picture} referrerPolicy="no-referrer" />
+                                ) : (
+                                    <span>{googleUser.name?.[0]?.toUpperCase() || 'U'}</span>
+                                )}
                             </div>
                             <div>
                                 <div className="text-sm font-bold">{googleUser.email}</div>
@@ -473,6 +488,7 @@ const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
                             setGoogleUser(null);
                             localStorage.removeItem('google_access_token');
                             localStorage.removeItem('google_user_info');
+                            console.log('User signed out manually');
                         }} className="text-red-500 hover:text-red-600">
                             Disconnect
                         </Button>
