@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Plus, Trash2, Globe, Database, Printer, ArrowUp, ArrowDown } from 'lucide-react';
 import { compressImage } from '@/lib/imageUtils';
+import { GoogleDriveSync } from '@/components/GoogleDriveSync';
 
 const Settings = () => {
     const { t, i18n } = useTranslation();
@@ -93,6 +94,9 @@ const Settings = () => {
     return (
         <div className="p-4 space-y-6 max-w-md mx-auto pb-24">
             <h1 className="text-2xl font-bold">{t('settings')}</h1>
+
+            {/* Google Drive Sync Section */}
+            <GoogleDriveSync />
 
             {/* Language Section */}
             <Card>
