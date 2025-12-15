@@ -10,7 +10,6 @@ export const GoogleDriveSync = () => {
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'error'>('idle');
   const [lastSyncTime, setLastSyncTime] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const syncToGoogleDrive = async (type: 'bills' | 'inventory' | 'all') => {
     const accessToken = localStorage.getItem('google_access_token');
@@ -114,7 +113,6 @@ export const GoogleDriveSync = () => {
       }
     } catch (e) {
       console.error('Failed to restore Google user', e);
-      setError('Failed to restore session');
     }
   }, []);
 
