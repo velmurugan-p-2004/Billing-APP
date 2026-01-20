@@ -433,6 +433,7 @@ const Billing = () => {
                     <div className="relative flex-1">
                         <Input
                             placeholder="Scan or Search Item..."
+                            inputMode="numeric"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
                             onKeyDown={async (e) => {
