@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { LayoutDashboard, ShoppingCart, Package, Settings, History } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Package, Settings, History, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +12,7 @@ const Layout = () => {
         { path: '/billing', icon: ShoppingCart, label: t('billing') },
         { path: '/inventory', icon: Package, label: t('inventory') },
         { path: '/history', icon: History, label: t('history') },
+        { path: '/parties', icon: Users, label: 'Parties' },
         { path: '/settings', icon: Settings, label: t('settings') },
     ];
 

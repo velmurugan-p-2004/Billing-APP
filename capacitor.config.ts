@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'outputbooks.netlify.app',
-  appName: 'Output Books',
+  appId: 'freedompos.netlify.app',
+  appName: 'FreedomPOS',
   webDir: 'dist'
 };
 

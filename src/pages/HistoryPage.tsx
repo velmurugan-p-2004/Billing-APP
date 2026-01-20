@@ -5,13 +5,16 @@ import { db, Bill } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Search, FileText, Printer } from 'lucide-react';
+import { Search, FileText, Printer, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import PrintModal from '@/components/PrintModal';
 
 const HistoryPage = () => {
     // const { t } = useTranslation(); // Unused
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
+    const [showPrintModal, setShowPrintModal] = useState(false);
+    const [selectedBillId, setSelectedBillId] = useState<number | null>(null);
 
     const [selectedProfileId, setSelectedProfileId] = useState<number | null>(
         Number(localStorage.getItem('defaultProfileId')) || null
@@ -48,8 +51,41 @@ const HistoryPage = () => {
     );
 
     const handlePrint = (bill: Bill) => {
-        // Navigate to print page with the bill ID
-        navigate('/print-bill', { state: { bill } });
+        if (!bill.id) return;
+
+        // Check default printer preference
+        const defaultPrinter = localStorage.getItem('defaultPrinterType');
+        if (defaultPrinter && defaultPrinter !== 'ask') {
+            const template = defaultPrinter === 'a4' ? 'professional' : 'simple';
+            navigate(`/print/${bill.id}?template=${template}&autoprint=true`);
+        } else {
+            setSelectedBillId(bill.id);
+            setShowPrintModal(true);
+        }
+    };
+
+    const handleDelete = async (bill: Bill) => {
+        if (window.confirm(`Are you sure you want to delete Bill #${bill.billNo}? This will restore the stock.`)) {
+            try {
+                // Restore stock for items where tracking is enabled
+                for (const item of bill.items) {
+                    if (item.id && item.trackStock !== false) {
+                        const dbItem = await db.items.get(item.id);
+                        if (dbItem) {
+                            await db.items.update(item.id, { stock: dbItem.stock + item.quantity });
+                        }
+                    }
+                }
+
+                // Delete the bill
+                if (bill.id) {
+                    await db.bills.delete(bill.id);
+                }
+            } catch (error) {
+                console.error("Error deleting bill:", error);
+                alert("Failed to delete bill");
+            }
+        }
     };
 
     return (
@@ -134,6 +170,14 @@ const HistoryPage = () => {
                                     >
                                         Edit
                                     </Button>
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                        onClick={() => handleDelete(bill)}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </Button>
                                 </div>
                             </div>
                         </CardContent>
@@ -146,6 +190,16 @@ const HistoryPage = () => {
                     </div>
                 )}
             </div>
+
+            {showPrintModal && selectedBillId && (
+                <PrintModal
+                    billId={selectedBillId}
+                    onClose={() => {
+                        setShowPrintModal(false);
+                        setSelectedBillId(null);
+                    }}
+                />
+            )}
         </div>
     );
 };

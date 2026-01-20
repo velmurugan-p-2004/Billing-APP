@@ -7,8 +7,10 @@ import Inventory from './pages/Inventory';
 import Billing from './pages/Billing';
 import Dashboard from './pages/Dashboard';
 import HistoryPage from './pages/HistoryPage';
+import PartiesPage from './pages/PartiesPage';
 import { InstallPWA } from './components/InstallPWA';
 import { WifiOff } from 'lucide-react';
+import { checkAndPerformBackup } from './utils/backupManager';
 
 function App() {
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -20,9 +22,18 @@ function App() {
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
 
+        // Initial Backup Check
+        checkAndPerformBackup();
+
+        // Periodic Check (every 1 minute) to handle if app stays open
+        const backupInterval = setInterval(() => {
+            checkAndPerformBackup();
+        }, 60 * 1000);
+
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
+            clearInterval(backupInterval);
         };
     }, []);
 
@@ -41,6 +52,7 @@ function App() {
                     <Route path="billing" element={<Billing />} />
                     <Route path="inventory" element={<Inventory />} />
                     <Route path="history" element={<HistoryPage />} />
+                    <Route path="parties" element={<PartiesPage />} />
                     <Route path="settings" element={<Settings />} />
                 </Route>
                 <Route path="/print/:id" element={<PrintBill />} />

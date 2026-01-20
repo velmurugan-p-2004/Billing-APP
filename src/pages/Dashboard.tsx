@@ -31,7 +31,7 @@ const Dashboard = () => {
 
     const todaysSales = todaysBills.reduce((sum, b) => sum + b.totalAmount, 0);
     const totalItems = activeItems.length;
-    const lowStockItems = activeItems.filter(i => i.stock < (i.lowStockLimit || 5)).length; // Use item limit if exists
+    const lowStockItems = activeItems.filter(i => i.trackStock !== false && i.stock < (i.lowStockLimit || 5)).length; // Use item limit if exists
 
     return (
         <div className="p-4 bg-slate-50 min-h-screen pb-24">
@@ -108,7 +108,7 @@ const Dashboard = () => {
                 <div className="mt-6">
                     <h3 className="font-semibold mb-2">Low Stock Alerts</h3>
                     <div className="bg-white rounded-lg border divide-y">
-                        {activeItems.filter(i => i.stock < (i.lowStockLimit || 5)).slice(0, 5).map(item => (
+                        {activeItems.filter(i => i.trackStock !== false && i.stock < (i.lowStockLimit || 5)).slice(0, 5).map(item => (
                             <div key={item.id} className="p-3 flex justify-between text-sm">
                                 <span>{item.name}</span>
                                 <span className="font-bold text-red-500">{item.stock} left</span>

@@ -2,18 +2,46 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db, Profile } from '@/db/db';
+import { GoogleDriveSync } from '@/components/GoogleDriveSync';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Plus, Trash2, Globe, Database, Printer, ArrowUp, ArrowDown } from 'lucide-react';
+import { Plus, Trash2, Globe, Database, Printer, ArrowUp, ArrowDown, Bluetooth, Usb, Save } from 'lucide-react';
 import { compressImage } from '@/lib/imageUtils';
-import { GoogleDriveSync } from '@/components/GoogleDriveSync';
+import { getBackupConfig, saveBackupConfig, AutoBackupConfig, performBackup, getLastBackupTime, checkAndPerformBackup } from '@/utils/backupManager';
 
 const Settings = () => {
     const { t, i18n } = useTranslation();
     const profiles = useLiveQuery(() => db.profiles.toArray());
     const [isEditing, setIsEditing] = useState(false);
     const [newProfile, setNewProfile] = useState<Partial<Profile>>({});
+    const [connectionType, setConnectionType] = useState(localStorage.getItem('printerConnectionType') || 'usb');
+    const [btDeviceName, setBtDeviceName] = useState(localStorage.getItem('bluetoothDeviceName') || '');
+    const [backupConfig, setBackupConfig] = useState<AutoBackupConfig>(getBackupConfig());
+    const [lastBackup, setLastBackup] = useState<string | null>(getLastBackupTime());
+    const [showBackupModal, setShowBackupModal] = useState(false);
+    const [backupProfileId, setBackupProfileId] = useState<string>('all');
+    const [isPwaFolderSet, setIsPwaFolderSet] = useState(false);
+
+    useEffect(() => {
+        db.appConfig.get('backupFolderHandle').then(h => {
+            // In browser, handle might need verification but presence is good enough indicator
+            setIsPwaFolderSet(!!h);
+        });
+    }, []);
+
+    const selectFolder = async () => {
+        try {
+            const handle = await (window as any).showDirectoryPicker();
+            if (handle) {
+                await db.appConfig.put({ key: 'backupFolderHandle', value: handle });
+                setIsPwaFolderSet(true);
+                alert("Folder Linked Successfully! Auto Backups will now save here.");
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    };
 
     const toggleLanguage = () => {
         const newLang = i18n.language === 'en' ? 'ta' : 'en';
@@ -45,19 +73,49 @@ const Settings = () => {
         if (id) db.profiles.delete(id);
     };
 
-    const handleBackup = async () => {
-        const allData = {
-            profiles: await db.profiles.toArray(),
-            items: await db.items.toArray(),
-            bills: await db.bills.toArray(),
-            timestamp: new Date().toISOString()
-        };
-        const blob = new Blob([JSON.stringify(allData, null, 2)], { type: "application/json" });
+    const performExport = async () => {
+        const allItems = await db.items.toArray();
+        const allBills = await db.bills.toArray();
+        const allProfiles = await db.profiles.toArray();
+        const allCategories = await db.categories.toArray();
+        const allParties = await db.parties.toArray();
+        const allTrans = await db.partyTransactions.toArray();
+
+        let exportData: any = {};
+
+        if (backupProfileId === 'all') {
+            exportData = {
+                profiles: allProfiles,
+                items: allItems,
+                bills: allBills,
+                categories: allCategories,
+                parties: allParties,
+                transactions: allTrans,
+                timestamp: new Date().toISOString()
+            };
+        } else {
+            const pid = Number(backupProfileId);
+            const profile = allProfiles.find(p => p.id === pid);
+            exportData = {
+                profile: profile,
+                items: allItems.filter(i => i.profileId === pid),
+                bills: allBills.filter(b => b.profileId === pid),
+                categories: allCategories.filter(c => c.profileId === pid),
+                parties: allParties.filter(p => p.profileId === pid),
+                transactions: allTrans.filter(t => t.profileId === pid),
+                timestamp: new Date().toISOString()
+            };
+        }
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `seematti_backup_${new Date().toISOString().split('T')[0]}.json`;
+        const prefix = backupProfileId === 'all' ? 'Seematti_Full' : `Seematti_${allProfiles.find(p => p.id === Number(backupProfileId))?.businessName.replace(/[^a-z0-9]/gi, '_') || 'Profile'}`;
+        a.download = `${prefix}_Backup_${new Date().toISOString().split('T')[0]}.json`;
         a.click();
+
+        setShowBackupModal(false);
     };
 
     const handleRestore = () => {
@@ -91,12 +149,29 @@ const Settings = () => {
         input.click();
     };
 
+    const connectBluetooth = async () => {
+        try {
+            const device = await (navigator as any).bluetooth.requestDevice({
+                filters: [{ services: ['000018f0-0000-1000-8000-00805f9b34fb'] }]
+            });
+            if (device) {
+                setBtDeviceName(device.name);
+                localStorage.setItem('bluetoothDeviceName', device.name);
+                localStorage.setItem('printerConnectionType', 'bluetooth');
+                setConnectionType('bluetooth');
+                alert(`Connected to ${device.name}`);
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Bluetooth Pairing Failed");
+        }
+    };
+
     return (
         <div className="p-4 space-y-6 max-w-md mx-auto pb-24">
             <h1 className="text-2xl font-bold">{t('settings')}</h1>
 
-            {/* Google Drive Sync Section */}
-            <GoogleDriveSync />
+
 
             {/* Language Section */}
             <Card>
@@ -258,6 +333,53 @@ const Settings = () => {
                         </select>
                     </div>
 
+                    <div className="space-y-2 pt-2 border-t">
+                        <label className="text-xs font-medium uppercase text-slate-500">Printer Connection Interface</label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div
+                                className={`p-3 border rounded cursor-pointer flex flex-col items-center gap-2 ${connectionType === 'usb' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50'}`}
+                                onClick={() => {
+                                    setConnectionType('usb');
+                                    localStorage.setItem('printerConnectionType', 'usb');
+                                }}
+                            >
+                                <Usb className="w-6 h-6" />
+                                <span className="text-xs font-bold">USB / System</span>
+                            </div>
+                            <div
+                                className={`p-3 border rounded cursor-pointer flex flex-col items-center gap-2 ${connectionType === 'bluetooth' ? 'bg-blue-50 border-blue-500 text-blue-700' : 'bg-slate-50'}`}
+                                onClick={() => {
+                                    setConnectionType('bluetooth');
+                                    localStorage.setItem('printerConnectionType', 'bluetooth');
+                                }}
+                            >
+                                <Bluetooth className="w-6 h-6" />
+                                <span className="text-xs font-bold">Bluetooth</span>
+                            </div>
+                        </div>
+
+                        {connectionType === 'bluetooth' && (
+                            <div className="p-3 bg-blue-50/50 border border-blue-100 rounded text-sm space-y-2">
+                                <p className="text-xs text-gray-600">
+                                    Directly connect to a thermal printer.
+                                </p>
+                                <div className="flex items-center justify-between">
+                                    <span className="font-medium text-xs">
+                                        {btDeviceName ? `Paired: ${btDeviceName}` : 'No device paired'}
+                                    </span>
+                                    <Button size="sm" variant="outline" onClick={connectBluetooth}>
+                                        {btDeviceName ? 'Change Device' : 'Pair Device'}
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                        {connectionType === 'usb' && (
+                            <div className="p-3 bg-slate-50 rounded text-xs text-gray-500">
+                                Uses the system's default print dialog. Ensure your USB printer is installed in Windows/Android settings.
+                            </div>
+                        )}
+                    </div>
+
                     <div className="space-y-2">
                         <label className="text-xs font-medium uppercase text-slate-500">Bill Template Options</label>
                         <div className="space-y-2">
@@ -307,307 +429,182 @@ const Settings = () => {
                 </CardContent>
             </Card>
 
-            {/* Google Drive Section */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <Database className="w-5 h-5" />
-                        Google Drive Backup
-                    </CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <GoogleDriveManager profiles={profiles} />
-                </CardContent>
-            </Card>
 
-            {/* App Info Section */}
-            <Card>
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                        <div className="w-5 h-5 bg-blue-600 rounded-sm flex items-center justify-center text-white text-xs font-bold">S</div>
-                        {t('app_info')}
-                    </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="p-3 bg-slate-50 border rounded-lg text-sm space-y-2">
-                        <div className="flex justify-between">
-                            <span className="text-gray-500">Version</span>
-                            <span className="font-medium">1.0.0</span>
-                        </div>
-                        <div className="flex justify-between">
-                            <span className="text-gray-500">Mode</span>
-                            <span className={`font-medium ${window.matchMedia('(display-mode: standalone)').matches ? 'text-green-600' : 'text-orange-600'}`}>
-                                {window.matchMedia('(display-mode: standalone)').matches ? 'Installed App' : 'Browser Mode'}
-                            </span>
-                        </div>
-                        {!window.matchMedia('(display-mode: standalone)').matches && (
-                            <div className="pt-2 border-t">
-                                <p className="text-xs text-gray-500 mb-1">Installation:</p>
-                                <p className="text-xs">
-                                    If the "Install App" banner is not visible at the top,
-                                    tap your browser menu <span className="font-bold">(⋮)</span> and select <span className="font-bold">"Add to Home Screen"</span> or <span className="font-bold">"Install App"</span>.
-                                </p>
-                            </div>
-                        )}
-                    </div>
-                </CardContent>
-            </Card>
+
+
 
             {/* Data Section */}
             <Card>
                 <CardHeader className="pb-2">
                     <CardTitle className="text-lg flex items-center gap-2">
                         <Database className="w-5 h-5" />
-                        Data
+                        Data & Backup
                     </CardTitle>
                 </CardHeader>
-                <CardContent className="flex flex-col gap-2">
-                    <Button variant="outline" onClick={handleBackup} className="w-full justify-start">
-                        Export Backup (JSON)
-                    </Button>
-                    <Button variant="outline" onClick={handleRestore} className="w-full justify-start">
-                        Restore from Backup
-                    </Button>
-                    <p className="text-xs text-slate-500 mt-2">
-                        Google Drive Sync can be implemented by uploading the exported JSON manually for now.
-                    </p>
+                <CardContent className="space-y-4">
+                    {/* Auto Backup Section */}
+                    <div className="bg-slate-50 p-3 rounded-lg border space-y-3">
+                        <div className="flex justify-between items-center">
+                            <label className="text-sm font-bold flex items-center gap-2">
+                                <Save className="w-4 h-4 text-blue-600" />
+                                Automatic Device Backup
+                            </label>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    className="scale-125"
+                                    checked={backupConfig.enabled}
+                                    onChange={(e) => {
+                                        const newConfig = { ...backupConfig, enabled: e.target.checked };
+                                        setBackupConfig(newConfig);
+                                        saveBackupConfig(newConfig);
+                                        if (e.target.checked) checkAndPerformBackup();
+                                    }}
+                                />
+                                <span className="text-sm font-medium">{backupConfig.enabled ? 'On' : 'Off'}</span>
+                            </div>
+                        </div>
+
+                        {backupConfig.enabled && (
+                            <div className="pl-6 space-y-2 animate-in slide-in-from-top-2 fade-in">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium uppercase text-slate-500">Backup Frequency</label>
+                                    <select
+                                        className="w-full p-2 border rounded text-sm bg-white"
+                                        value={backupConfig.frequency}
+                                        onChange={(e) => {
+                                            const newConfig = { ...backupConfig, frequency: e.target.value as any };
+                                            setBackupConfig(newConfig);
+                                            saveBackupConfig(newConfig);
+                                        }}
+                                    >
+                                        <option value="hourly">Every Hour</option>
+                                        <option value="daily">Daily</option>
+                                        <option value="2days">Every 2 Days</option>
+                                        <option value="weekly">Weekly</option>
+                                        <option value="custom">Custom Interval</option>
+                                    </select>
+
+                                    {backupConfig.frequency === 'custom' && (
+                                        <div className="pt-2 animate-in slide-in-from-top-1">
+                                            <label className="text-xs font-medium text-slate-500">Interval (in minutes)</label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    type="number"
+                                                    min="15"
+                                                    placeholder="Minutes (e.g. 30)"
+                                                    value={backupConfig.customIntervalMinutes || ''}
+                                                    onChange={(e) => {
+                                                        const mins = parseInt(e.target.value) || 60;
+                                                        const newConfig = { ...backupConfig, customIntervalMinutes: mins };
+                                                        setBackupConfig(newConfig);
+                                                        saveBackupConfig(newConfig);
+                                                    }}
+                                                />
+                                                <span className="text-sm self-center">mins</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                                {lastBackup && (
+                                    <p className="text-[10px] text-gray-500">
+                                        Last Backup: {new Date(lastBackup).toLocaleString()}
+                                    </p>
+                                )}
+                                <p className="text-[10px] text-blue-600 bg-blue-50 p-2 rounded">
+                                    Files are saved to your device's <b>Documents/Seematti_Backups</b> folder.
+                                </p>
+
+                                {('showDirectoryPicker' in window) && (
+                                    <div className="pt-2 border-t mt-2">
+                                        <label className="text-xs font-medium uppercase text-slate-500">Backup Storage Location</label>
+                                        <div className="flex items-center justify-between mt-1 p-2 border rounded bg-white">
+                                            <div className="text-xs text-gray-700 font-medium">
+                                                {isPwaFolderSet ? '✅ Local Folder Linked' : '⚠ Virtual Browser Storage'}
+                                            </div>
+                                            <Button size="sm" variant="outline" onClick={selectFolder}>
+                                                {isPwaFolderSet ? 'Change Folder' : 'Select Folder'}
+                                            </Button>
+                                        </div>
+                                        {isPwaFolderSet && (
+                                            <div className="mt-2 text-right">
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    className="text-xs"
+                                                    onClick={async () => {
+                                                        // Import dynamically if needed or just use import
+                                                        /* 
+                                                          Note: performBackup is imported at top. 
+                                                          If not, I might need to make sure.
+                                                          The previous lint said 'performBackup' declared but not read (line 11).
+                                                          So it IS imported.
+                                                        */
+                                                        const result = await performBackup();
+                                                        alert(result.message);
+                                                    }}
+                                                >
+                                                    Test Backup & Verify Permission
+                                                </Button>
+                                            </div>
+                                        )}
+                                        {!isPwaFolderSet && (
+                                            <p className="text-[10px] text-orange-600 mt-1 font-medium">
+                                                Select a local folder to ensure backups are saved to your PC.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-2 pt-2 border-t">
+                        <Button variant="outline" onClick={() => setShowBackupModal(true)} className="w-full justify-start">
+                            Export Backup (JSON)
+                        </Button>
+                        <Button variant="outline" onClick={handleRestore} className="w-full justify-start">
+                            Restore from Backup
+                        </Button>
+                        <p className="text-xs text-slate-500 mt-2">
+                            Google Drive Sync can be implemented by uploading the exported JSON manually for now.
+                        </p>
+                    </div>
                 </CardContent>
             </Card>
+
+            {showBackupModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-lg p-6 w-full max-w-sm space-y-4 animate-in zoom-in-95">
+                        <h3 className="text-lg font-bold">Export Backup</h3>
+                        <p className="text-sm text-gray-500">Select which data profile you want to export.</p>
+
+                        <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                            <div className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer" onClick={() => setBackupProfileId('all')}>
+                                <input type="radio" checked={backupProfileId === 'all'} onChange={() => setBackupProfileId('all')} />
+                                <span className="font-medium text-sm">Full System Backup (All Profiles)</span>
+                            </div>
+
+                            {profiles?.map(p => (
+                                <div key={p.id} className="flex items-center gap-2 p-2 border rounded hover:bg-slate-50 cursor-pointer" onClick={() => setBackupProfileId(String(p.id))}>
+                                    <input type="radio" checked={backupProfileId === String(p.id)} onChange={() => setBackupProfileId(String(p.id))} />
+                                    <span className="font-medium text-sm">{p.businessName}</span>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex gap-2 pt-2">
+                            <Button variant="outline" className="flex-1" onClick={() => setShowBackupModal(false)}>Cancel</Button>
+                            <Button className="flex-1" onClick={performExport}>Export</Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };
 
-const GoogleDriveManager = ({ profiles }: { profiles?: Profile[] }) => {
-    // Real Google Auth
-    const [googleUser, setGoogleUser] = useState<{ email: string; name: string, picture?: string } | null>(null);
-    const [showSignInModal, setShowSignInModal] = useState(false);
-    const [isLoading, setIsLoading] = useState(false);
 
-    useEffect(() => {
-        const checkAuth = async () => {
-            const savedUser = localStorage.getItem('google_user_info');
-            const accessToken = localStorage.getItem('google_access_token');
-
-            console.log('Checking Auth State:', { savedUser: !!savedUser, accessToken: !!accessToken });
-
-            if (savedUser) {
-                try {
-                    setGoogleUser(JSON.parse(savedUser));
-                    console.log('Restored user from localStorage');
-                    return;
-                } catch (e) {
-                    console.error("Failed to parse saved user info", e);
-                    localStorage.removeItem('google_user_info');
-                }
-            }
-
-            // Self-healing: If user info missing/bad but token exists, try to fetch it
-            if (accessToken) {
-                console.log('Attempting self-healing using token...');
-                try {
-                    const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                        headers: { Authorization: `Bearer ${accessToken}` }
-                    });
-                    if (res.ok) {
-                        const user = await res.json();
-                        const userData = {
-                            email: user.email,
-                            name: user.name,
-                            picture: user.picture
-                        };
-                        setGoogleUser(userData);
-                        localStorage.setItem('google_user_info', JSON.stringify(userData));
-                        console.log('Self-healing successful');
-                    } else {
-                        // Token likely expired
-                        console.warn('Token invalid, clearing storage');
-                        localStorage.removeItem('google_access_token');
-                    }
-                } catch (err) {
-                    console.error("Failed to restore session from token", err);
-                }
-            }
-        };
-
-        checkAuth();
-    }, []);
-
-    const handleGoogleSignIn = () => {
-        setIsLoading(true);
-        console.log('Initiating Google Sign In...');
-        try {
-            const client = google.accounts.oauth2.initTokenClient({
-                client_id: import.meta.env.VITE_GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/drive.file email profile',
-                callback: async (tokenResponse: any) => {
-                    console.log('Token response received', tokenResponse);
-                    if (tokenResponse && tokenResponse.access_token) {
-                        try {
-                            // Fetch User Profile
-                            const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                                headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-                            });
-                            const user = await res.json();
-                            const userData = {
-                                email: user.email,
-                                name: user.name,
-                                picture: user.picture
-                            };
-                            console.log('User info fetched', userData);
-
-                            setGoogleUser(userData);
-
-                            // Save persistence data
-                            localStorage.setItem('google_access_token', tokenResponse.access_token);
-                            localStorage.setItem('google_user_info', JSON.stringify(userData));
-                            console.log('Detailed saved to localStorage');
-
-                            setShowSignInModal(false);
-                        } catch (err) {
-                            console.error('Error fetching user info', err);
-                            alert('Failed to get user profile');
-                        }
-                    }
-                    setIsLoading(false);
-                },
-                error_callback: (err: any) => {
-                    console.error('Auth Error', err);
-                    alert('Google Sign In Failed. Check console.');
-                    setIsLoading(false);
-                }
-            });
-            client.requestAccessToken();
-        } catch (err) {
-            console.error(err);
-            alert('Google Sign In configuration missing or invalid origin');
-            setIsLoading(false);
-        }
-    };
-
-    const handleLinkProfile = async (profileId: number, link: boolean) => {
-        if (!googleUser) return;
-
-        if (link) {
-            await db.profiles.update(profileId, { linkedGoogleEmail: googleUser.email });
-        } else {
-            // Only unlink if it matches current user
-            await db.profiles.update(profileId, { linkedGoogleEmail: undefined });
-        }
-    };
-
-    return (
-        <div className="space-y-4">
-            {!googleUser ? (
-                <div className="text-center p-4 border rounded-lg bg-slate-50 border-dashed">
-                    <p className="text-sm text-gray-500 mb-3">Sign in to sync your data to Google Drive</p>
-                    <Button onClick={() => setShowSignInModal(true)} className="bg-white text-gray-700 border hover:bg-gray-50">
-                        <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" className="w-4 h-4 mr-2" />
-                        Sign in with Google
-                    </Button>
-                </div>
-            ) : (
-                <div className="space-y-3">
-                    <div className="flex items-center justify-between p-3 bg-blue-50 text-blue-800 rounded-lg">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-blue-200 flex items-center justify-center font-bold text-xs overflow-hidden">
-                                {googleUser.picture ? (
-                                    <img src={googleUser.picture} referrerPolicy="no-referrer" />
-                                ) : (
-                                    <span>{googleUser.name?.[0]?.toUpperCase() || 'U'}</span>
-                                )}
-                            </div>
-                            <div>
-                                <div className="text-sm font-bold">{googleUser.email}</div>
-                                <div className="text-xs">Connected to Drive</div>
-                            </div>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => {
-                            setGoogleUser(null);
-                            localStorage.removeItem('google_access_token');
-                            localStorage.removeItem('google_user_info');
-                            console.log('User signed out manually');
-                        }} className="text-red-500 hover:text-red-600">
-                            Disconnect
-                        </Button>
-                    </div>
-
-                    <div className="pt-2">
-                        <h4 className="text-sm font-medium mb-2">Link Profiles to this Account</h4>
-                        <div className="space-y-2">
-                            {profiles?.map((profile) => {
-                                const isLinkedToCurrent = profile.linkedGoogleEmail === googleUser.email;
-                                const isLinkedToOther = profile.linkedGoogleEmail && !isLinkedToCurrent;
-
-                                return (
-                                    <div key={profile.id} className="flex items-center justify-between p-2 border rounded">
-                                        <div className="flex items-center gap-2">
-                                            {profile.logo && <img src={profile.logo} className="w-6 h-6 rounded" />}
-                                            <span className="text-sm">{profile.businessName}</span>
-                                        </div>
-
-                                        {isLinkedToOther ? (
-                                            <span className="text-xs text-orange-500">Linked to {profile.linkedGoogleEmail}</span>
-                                        ) : (
-                                            <input
-                                                type="checkbox"
-                                                className="w-4 h-4 accent-blue-600"
-                                                checked={isLinkedToCurrent}
-                                                onChange={(e) => handleLinkProfile(profile.id!, e.target.checked)}
-                                            />
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {showSignInModal && (
-                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl w-full max-w-sm overflow-hidden shadow-2xl animate-in fade-in zoom-in-95 duration-200">
-                        <div className="p-4 border-b flex items-center justify-between bg-gray-50">
-                            <h3 className="font-semibold text-gray-700">Sync Setup</h3>
-                            <button onClick={() => setShowSignInModal(false)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
-                        </div>
-
-                        <div className="p-6 space-y-6">
-                            <div className="space-y-1 text-center">
-                                <div className="mx-auto w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mb-2 text-blue-600">
-                                    <Database className="w-6 h-6" />
-                                </div>
-                                <h2 className="text-lg font-bold">Connect Google Drive</h2>
-                                <p className="text-xs text-gray-500">Securely back up your business data.</p>
-                            </div>
-
-                            <Button
-                                onClick={handleGoogleSignIn}
-                                disabled={isLoading}
-                                className="w-full bg-white text-gray-700 border hover:bg-gray-50 py-6"
-                            >
-                                <img src="https://upload.wikimedia.org/wikipedia/commons/c/c1/Google_%22G%22_logo.svg" className="w-5 h-5 mr-3" />
-                                {isLoading ? 'Connecting...' : 'Continue with Google'}
-                            </Button>
-
-                            <div className="bg-blue-50 p-3 rounded-lg text-xs space-y-2 border border-blue-100">
-                                <p className="font-semibold text-blue-700 flex items-center gap-1">
-                                    <span className="w-4 h-4 bg-blue-600 text-white rounded-full inline-flex items-center justify-center text-[10px]">?</span>
-                                    How it works
-                                </p>
-                                <ol className="list-decimal list-inside space-y-1 text-blue-800">
-                                    <li>Authenticate with your Google Account.</li>
-                                    <li>Grant permission to access file storage.</li>
-                                    <li>Select which profiles to sync.</li>
-                                    <li>Automatic backups will be saved to your Drive.</li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
 
 const BillLayoutEditor = () => {
     const defaultOrder = [

@@ -1,42 +1,99 @@
 import { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
-import { db, Item, BillItem } from '@/db/db';
+import { db, Item, BillItem, Category, Party } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Plus, Minus, Trash2, ScanLine } from 'lucide-react';
+import { Plus, Minus, Trash2, ScanLine, Search, UserPlus } from 'lucide-react';
 import Scanner from '@/components/Scanner';
 import { QRCodeSVG } from 'qrcode.react';
 import PrintModal from '@/components/PrintModal';
+import CategoryItemSelector from '@/components/CategoryItemSelector';
 
 const Billing = () => {
     const { t } = useTranslation();
+    const navigate = useNavigate();
     const [cart, setCart] = useState<BillItem[]>([]);
     const [customerName, setCustomerName] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [isScanning, setIsScanning] = useState(false);
     const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
     const [showPayment, setShowPayment] = useState(false);
-    const [paymentMode, setPaymentMode] = useState<'cash' | 'upi'>('cash');
+
+    const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'credit'>('cash');
     const [lastBillId, setLastBillId] = useState<number | null>(null);
     const [showPrintModal, setShowPrintModal] = useState(false);
+    const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+    const [categoryItems, setCategoryItems] = useState<Item[]>([]);
+
+    // Credit / Party State
+    const [selectedParty, setSelectedParty] = useState<Party | null>(null);
+    const [partySearchQuery, setPartySearchQuery] = useState('');
+    const [newPartyMobile, setNewPartyMobile] = useState('');
+    const [newPartyAadhar, setNewPartyAadhar] = useState('');
+    const [newPartyProfileId, setNewPartyProfileId] = useState<number | undefined>(undefined);
+    const [showNewPartyForm, setShowNewPartyForm] = useState(false);
 
     const profiles = useLiveQuery(() => db.profiles.toArray());
-    const items = useLiveQuery(() => db.items.toArray());
+    const items = useLiveQuery(() => {
+        if (selectedProfileId) {
+            return db.items.filter(i => i.profileId === selectedProfileId).toArray();
+        }
+        return db.items.toArray();
+    }, [selectedProfileId]);
 
-    // Auto select first profile
+    const categories = useLiveQuery(() => {
+        if (selectedProfileId) {
+            return db.categories.filter(c => c.profileId === selectedProfileId).toArray();
+        }
+        return db.categories.toArray();
+    }, [selectedProfileId]);
+    const parties = useLiveQuery(() => {
+        let query = db.parties.toCollection();
+        // Filter by profile if set
+        if (selectedProfileId) {
+            query = db.parties.where('profileId').equals(selectedProfileId);
+        } else {
+            // If no profile selected, maybe show all? Or match unset?
+            // Based on previous logic, let's show all or just match no profile.
+            // But 'db.parties.where' needs an index. 'profileId' is indexed in v4.
+            // If selectedProfileId is null, we might want to show all for backward compat or just those without profile.
+            // For safety, let's just use filter to handle null/undefined profileId vs no profileId field.
+            query = query.filter(p => p.profileId === selectedProfileId || !p.profileId);
+        }
+        return query.toArray();
+    }, [selectedProfileId]);
+
+    // Auto select profile logic
     useEffect(() => {
         if (profiles && profiles.length > 0 && !selectedProfileId) {
+            const defaultIdStr = localStorage.getItem('defaultProfileId');
+            if (defaultIdStr) {
+                const defaultId = parseInt(defaultIdStr);
+                const exists = profiles.find(p => p.id === defaultId);
+                if (exists) {
+                    setSelectedProfileId(defaultId);
+                    return;
+                }
+            }
+            // Fallback to first profile if no default or default not found
             setSelectedProfileId(profiles[0].id || null);
         }
     }, [profiles, selectedProfileId]);
 
-    const filteredItems = items?.filter(i =>
-        (i.profileId === selectedProfileId || !i.profileId) &&
-        (i.name.toLowerCase().includes(searchQuery.toLowerCase()) || i.sku.includes(searchQuery))
-    ).slice(0, 5); // Limit suggestions
+    // Check if search query matches a category SKU
+    const matchedCategory = searchQuery ? categories?.find(c => c.sku === searchQuery.trim()) : null;
+
+    const filteredItems = matchedCategory
+        ? // If category SKU matched, show all items in that category ONLY if they match profile
+        items?.filter(i => i.categoryId === matchedCategory.id && i.profileId === selectedProfileId)
+        : // Otherwise, filter items by name or individual SKU
+        items?.filter(i =>
+            i.profileId === selectedProfileId &&
+            (i.name.toLowerCase().includes(searchQuery.toLowerCase()) || (i.sku && i.sku.includes(searchQuery)))
+        ).slice(0, 5); // Limit suggestions
 
     const addToCart = (item: Item) => {
         setCart(prev => {
@@ -49,13 +106,31 @@ const Billing = () => {
         setSearchQuery('');
     };
 
-    const handleScan = (code: string) => {
+    const handleScan = async (code: string) => {
+        // First, check if it's a category SKU
+        const category = categories?.find(c => c.sku === code);
+        if (category) {
+            // Get all items in this category
+            const catItems = items?.filter(i => i.categoryId === category.id) || [];
+            if (catItems.length === 0) {
+                alert('No items found in this category!');
+                setIsScanning(false);
+                return;
+            }
+            // Show category item selector
+            setSelectedCategory(category);
+            setCategoryItems(catItems);
+            setIsScanning(false);
+            return;
+        }
+
+        // If not a category, check individual item SKU (backward compatibility)
         const item = items?.find(i => i.sku === code);
         if (item) {
             addToCart(item);
             setIsScanning(false);
         } else {
-            alert('Item not found!');
+            alert('Item or Category not found!');
             setIsScanning(false);
         }
     };
@@ -147,10 +222,50 @@ const Billing = () => {
         }
     }, [location]);
 
+    const [paidAmount, setPaidAmount] = useState<number>(0);
+
+    // Auto update paid amount when total changes, but only if not credit (or maybe just reset?)
+    // Actually, distinct UX: 
+    // If credit, paidAmount default to 0. 
+    // If cash/UPI, paidAmount is implicitly totalAmount (but we don't necessarily show input).
+
     const handleSaveBill = async () => {
         if (cart.length === 0) return;
 
+        let finalPartyId = selectedParty?.id;
+
+        // Handle Credit Logic
+        if (paymentMode === 'credit') {
+            if (!selectedParty && !showNewPartyForm) {
+                alert("Please select a party or create a new one for credit billing.");
+                return;
+            }
+
+            if (showNewPartyForm) {
+                if (!customerName || !newPartyMobile) {
+                    alert("Name and Mobile are required for new party.");
+                    return;
+                }
+                // Create new party
+                try {
+                    finalPartyId = await db.parties.add({
+                        name: customerName,
+                        mobile: newPartyMobile,
+                        aadhar: newPartyAadhar,
+                        balance: 0,
+                        profileId: newPartyProfileId || selectedProfileId || undefined
+                    }) as number;
+                } catch (e) {
+                    console.error(e);
+                    alert("Error creating party. Mobile number might be duplicate?"); // Mobile is not unique key index, so duplicate allowed unless enforced.
+                    // return; 
+                }
+            }
+        }
+
         let billId;
+
+        const effectivePaidAmount = paymentMode === 'credit' ? paidAmount : totalAmount;
 
         // If Editing, we need to REVERSE the stock effect of the OLD bill items first
         if (editingBillId) {
@@ -165,6 +280,22 @@ const Billing = () => {
                         }
                     }
                 }
+
+                // Revert party balance if it was credit
+                // This is complex b/c logic might have changed. 
+                // Simplification for now: If we edit a bill, we assume managing balance manually or we just don't perfect this yet.
+                // Or: remove old debt effect. 
+                if (oldBill.partyId && oldBill.paymentMode === 'credit') {
+                    const oldParty = await db.parties.get(oldBill.partyId);
+                    const oldPaid = oldBill.paidAmount || 0;
+                    const oldTotal = oldBill.totalAmount;
+                    const oldCredit = oldTotal - oldPaid;
+                    if (oldParty) {
+                        await db.parties.update(oldBill.partyId, {
+                            balance: (oldParty.balance || 0) - oldCredit
+                        });
+                    }
+                }
             }
 
             // Update existing bill
@@ -175,33 +306,79 @@ const Billing = () => {
                 totalAmount,
                 paymentMode,
                 discount: discountType === 'amount' ? discount : (subTotal * discount / 100),
-                profileId: selectedProfileId || undefined
+                profileId: selectedProfileId || undefined,
+                partyId: finalPartyId,
+                paidAmount: effectivePaidAmount
             });
             billId = editingBillId;
         } else {
             // New Bill Logic
-            const lastBill = await db.bills.orderBy('billNo').last();
+            // New Bill Logic
+            // Find last bill for THIS profile to determine next bill number
+            const lastBill = await db.bills
+                .orderBy('billNo')
+                .reverse()
+                .filter(b => b.profileId === (selectedProfileId || undefined))
+                .first();
             const nextBillNo = (lastBill?.billNo || 0) + 1;
 
             billId = await db.bills.add({
                 billNo: nextBillNo,
                 date: new Date().toISOString(),
-                customerName,
+                customerName: (paymentMode === 'credit' && !selectedParty) ? customerName : (selectedParty ? selectedParty.name : customerName),
                 items: cart,
                 totalAmount,
                 paymentMode,
                 discount: discountType === 'amount' ? discount : (subTotal * discount / 100),
-                profileId: selectedProfileId || undefined
+                profileId: selectedProfileId || undefined,
+                partyId: finalPartyId,
+                paidAmount: effectivePaidAmount
             });
+
+            // Log Party Transaction for New Credit Bills
+            if (paymentMode === 'credit' && finalPartyId) {
+                // 1. Log the Bill (Debt)
+                await db.partyTransactions.add({
+                    partyId: finalPartyId,
+                    date: new Date().toISOString(),
+                    type: 'CREDIT_BILL',
+                    amount: totalAmount,
+                    billId: Number(billId),
+                    description: `Bill #${nextBillNo}`
+                });
+
+                // 2. Log Initial Payment if any
+                if (effectivePaidAmount && effectivePaidAmount > 0) {
+                    await db.partyTransactions.add({
+                        partyId: finalPartyId,
+                        date: new Date().toISOString(),
+                        type: 'PAYMENT',
+                        amount: effectivePaidAmount,
+                        billId: Number(billId),
+                        description: `Payment for Bill #${nextBillNo}`
+                    });
+                }
+            }
         }
 
-        // DEDUCT stock for current cart items
+        // DEDUCT stock for current cart items (only if stock tracking is enabled)
         for (const item of cart) {
-            if (item.id) {
+            if (item.id && item.trackStock !== false) {
                 const dbItem = await db.items.get(item.id);
                 if (dbItem) {
                     await db.items.update(item.id, { stock: dbItem.stock - item.quantity });
                 }
+            }
+        }
+
+        // Update Party Balance
+        if (paymentMode === 'credit' && finalPartyId) {
+            const party = await db.parties.get(finalPartyId);
+            if (party) {
+                const creditAmount = totalAmount - effectivePaidAmount;
+                await db.parties.update(finalPartyId, {
+                    balance: (party.balance || 0) + creditAmount
+                });
             }
         }
 
@@ -211,8 +388,22 @@ const Billing = () => {
         setDiscount(0);
         setEditingBillId(null);
         setShowPayment(false);
-        // Alert removed, showing print modal instead
-        setShowPrintModal(true);
+        // Reset Credit State
+        setPaymentMode('cash');
+        setSelectedParty(null);
+        setPartySearchQuery('');
+        setNewPartyMobile('');
+        setShowNewPartyForm(false);
+        setPaidAmount(0);
+
+        // Check default printer preference
+        const defaultPrinter = localStorage.getItem('defaultPrinterType');
+        if (defaultPrinter && defaultPrinter !== 'ask') {
+            const template = defaultPrinter === 'a4' ? 'professional' : 'simple';
+            navigate(`/print/${billId}?template=${template}&autoprint=true`);
+        } else {
+            setShowPrintModal(true);
+        }
     };
 
     return (
@@ -244,6 +435,33 @@ const Billing = () => {
                             placeholder="Scan or Search Item..."
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
+                            onKeyDown={async (e) => {
+                                if (e.key === 'Enter' && searchQuery.trim()) {
+                                    // Check if it's a category SKU
+                                    const category = categories?.find(c => c.sku === searchQuery.trim());
+                                    if (category) {
+                                        const catItems = items?.filter(i => i.categoryId === category.id) || [];
+                                        if (catItems.length === 0) {
+                                            alert('No items found in this category!');
+                                            return;
+                                        }
+                                        setSelectedCategory(category);
+                                        setCategoryItems(catItems);
+                                        setSearchQuery('');
+                                        return;
+                                    }
+
+                                    // Check if it's an individual item SKU
+                                    const item = items?.find(i => i.sku === searchQuery.trim());
+                                    if (item) {
+                                        addToCart(item);
+                                        return;
+                                    }
+
+                                    // If no match found
+                                    alert('Item or Category not found!');
+                                }
+                            }}
                         />
                         {searchQuery && (
                             <div className="absolute top-full left-0 right-0 bg-white border shadow-lg z-10 max-h-40 overflow-auto rounded-b-lg">
@@ -254,7 +472,9 @@ const Billing = () => {
                                         onClick={() => addToCart(item)}
                                     >
                                         <div className="font-medium">{item.name}</div>
-                                        <div className="text-xs text-gray-500">Stock: {item.stock} - ₹{item.price}</div>
+                                        <div className="text-xs text-gray-500">
+                                            {item.trackStock !== false && `Stock: ${item.stock} - `}₹{item.price}
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -355,6 +575,7 @@ const Billing = () => {
                 <Button className="w-full" size="lg" disabled={cart.length === 0} onClick={() => {
                     setTransactionRef(`Bill-${Date.now()}`);
                     setShowPayment(true);
+                    setPaidAmount(0);
                 }}>
                     Checkout
                 </Button>
@@ -396,20 +617,140 @@ const Billing = () => {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="flex gap-2">
                             <Button
                                 variant={paymentMode === 'cash' ? 'default' : 'outline'}
                                 onClick={() => setPaymentMode('cash')}
+                                className="flex-1"
                             >
                                 Cash
                             </Button>
                             <Button
                                 variant={paymentMode === 'upi' ? 'default' : 'outline'}
                                 onClick={() => setPaymentMode('upi')}
+                                className="flex-1"
                             >
                                 UPI
                             </Button>
+                            <Button
+                                variant={paymentMode === 'credit' ? 'default' : 'outline'}
+                                onClick={() => {
+                                    setPaymentMode('credit');
+                                    setCustomerName(customerName); // Sync
+                                    setPartySearchQuery(customerName); // Auto search
+                                }}
+                                className="flex-1"
+                            >
+                                Credit
+                            </Button>
                         </div>
+
+
+                        {/* Credit Payment Fields */}
+                        {paymentMode === 'credit' && (
+                            <div className="bg-blue-50 p-3 rounded border border-blue-200 space-y-3 animate-in fade-in zoom-in-95">
+                                {!showNewPartyForm ? (
+                                    <div className="space-y-2">
+                                        <label className="text-xs font-medium text-blue-700">Select Customer (Party)</label>
+                                        <select
+                                            className="flex h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                            value={selectedParty?.id || ''}
+                                            onChange={(e) => {
+                                                const partyId = Number(e.target.value);
+                                                const party = parties?.find(p => p.id === partyId);
+                                                setSelectedParty(party || null);
+                                            }}
+                                        >
+                                            <option value="">Select Party</option>
+                                            {parties?.map(p => (
+                                                <option key={p.id} value={p.id}>
+                                                    {p.name} ({p.mobile})
+                                                </option>
+                                            ))}
+                                        </select>
+
+                                        {selectedParty ? (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between p-2 bg-white border rounded">
+                                                    <div>
+                                                        <div className="font-bold text-sm">{selectedParty.name}</div>
+                                                        <div className="text-xs text-gray-500">Bal: ₹{selectedParty.balance}</div>
+                                                    </div>
+                                                    <Button size="sm" variant="ghost" onClick={() => setSelectedParty(null)}>Change</Button>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex-1 space-y-1">
+                                                        <label className="text-xs font-bold text-gray-700">Paid Amount</label>
+                                                        <Input
+                                                            type="number"
+                                                            placeholder="0"
+                                                            className="bg-white h-9"
+                                                            value={paidAmount || ''}
+                                                            onChange={(e) => setPaidAmount(Number(e.target.value))}
+                                                        />
+                                                    </div>
+                                                    <div className="flex-1 space-y-1">
+                                                        <label className="text-xs font-bold text-gray-700">To Credit</label>
+                                                        <div className="h-9 px-3 py-2 bg-slate-100 border rounded text-sm font-medium text-red-600">
+                                                            ₹{(Math.max(0, totalAmount - paidAmount)).toFixed(2)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <Button
+                                                variant="secondary"
+                                                className="w-full text-xs h-8"
+                                                onClick={() => {
+                                                    setShowNewPartyForm(true);
+                                                    setCustomerName(partySearchQuery); // Pre-fill name from search
+                                                    setNewPartyProfileId(selectedProfileId || undefined);
+                                                }}
+                                            >
+                                                <UserPlus className="w-3 h-3 mr-1" /> Create New Customer
+                                            </Button>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <span className="text-xs font-bold text-blue-700">New Customer Details</span>
+                                            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setShowNewPartyForm(false)}>Cancel</Button>
+                                        </div>
+                                        <select
+                                            className="bg-white h-8 text-sm w-full border rounded px-2"
+                                            value={newPartyProfileId || ''}
+                                            onChange={(e) => setNewPartyProfileId(Number(e.target.value))}
+                                        >
+                                            <option value="">Select Profile (Optional)</option>
+                                            {profiles?.map(p => (
+                                                <option key={p.id} value={p.id}>{p.businessName}</option>
+                                            ))}
+                                        </select>
+                                        <Input
+                                            placeholder="Customer Name *"
+                                            value={customerName}
+                                            onChange={(e) => setCustomerName(e.target.value)}
+                                            className="bg-white h-8 text-sm"
+                                        />
+                                        <Input
+                                            placeholder="Mobile Number *"
+                                            value={newPartyMobile}
+                                            onChange={(e) => setNewPartyMobile(e.target.value)}
+                                            className="bg-white h-8 text-sm"
+                                            type="tel"
+                                        />
+                                        <Input
+                                            placeholder="Aadhar No (Optional)"
+                                            value={newPartyAadhar}
+                                            onChange={(e) => setNewPartyAadhar(e.target.value)}
+                                            className="bg-white h-8 text-sm"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {paymentMode === 'upi' && selectedProfile?.upiId && (
                             <div className="flex justify-center py-4 bg-slate-50 rounded">
@@ -427,18 +768,37 @@ const Billing = () => {
                         </div>
                     </div>
                 </div>
-            )}
+            )
+            }
+
 
             {isScanning && <Scanner onScan={handleScan} onClose={() => setIsScanning(false)} />}
 
-            {showPrintModal && lastBillId && (
-                <PrintModal
-                    billId={lastBillId}
-                    onClose={() => setShowPrintModal(false)}
-                />
-            )}
-        </div>
+            {
+                showPrintModal && lastBillId && (
+                    <PrintModal
+                        billId={lastBillId}
+                        onClose={() => setShowPrintModal(false)}
+                    />
+                )
+            }
+
+            {
+                selectedCategory && (
+                    <CategoryItemSelector
+                        category={selectedCategory}
+                        items={categoryItems}
+                        onSelect={addToCart}
+                        onClose={() => {
+                            setSelectedCategory(null);
+                            setCategoryItems([]);
+                        }}
+                    />
+                )
+            }
+        </div >
     );
 };
 
 export default Billing;
+

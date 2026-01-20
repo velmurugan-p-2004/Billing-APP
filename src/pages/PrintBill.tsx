@@ -1,27 +1,44 @@
 import { useEffect, useRef, Fragment } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db } from '@/db/db';
 // import { cn } from '@/lib/utils';
 
 const PrintBill = () => {
     const { id } = useParams();
+    const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const template = searchParams.get('template') || 'simple'; // simple, professional, gst
     const autoPrint = searchParams.get('autoprint') === 'true';
 
     const bill = useLiveQuery(() => db.bills.get(Number(id)), [id]);
-    const profiles = useLiveQuery(() => db.profiles.toArray());
-    const profile = profiles?.[0]; // Default profile
+    const profile = useLiveQuery(async () => {
+        if (!bill) return undefined;
+        if (bill.profileId) {
+            return await db.profiles.get(bill.profileId);
+        }
+        return await db.profiles.toCollection().first();
+    }, [bill?.profileId]);
+
+    const party = useLiveQuery(() =>
+        bill?.partyId ? db.parties.get(bill.partyId) : undefined
+        , [bill?.partyId]);
 
     const hasPrinted = useRef(false);
 
     useEffect(() => {
         if (bill && profile && autoPrint && !hasPrinted.current) {
             hasPrinted.current = true;
-            setTimeout(() => window.print(), 500);
+            setTimeout(() => {
+                window.print();
+
+                // Navigate back to billing after 5 seconds
+                setTimeout(() => {
+                    navigate('/billing');
+                }, 5000);
+            }, 500);
         }
-    }, [bill, profile, autoPrint]);
+    }, [bill, profile, autoPrint, navigate]);
 
     if (!bill || !profile) return <div>Loading...</div>;
 
@@ -63,6 +80,9 @@ const PrintBill = () => {
                                 <span>Bill: {bill.billNo}</span>
                                 <span>{new Date(bill.date).toLocaleDateString()}</span>
                             </div>
+                            {bill.paymentMode === 'credit' && (
+                                <div className="text-center font-bold mt-1">CREDIT BILL</div>
+                            )}
                         </>
                     );
                 case 'items':
@@ -108,6 +128,26 @@ const PrintBill = () => {
                                 <span>Grand Total</span>
                                 <span>₹{bill.totalAmount.toFixed(0)}</span>
                             </div>
+
+                            {bill.paymentMode === 'credit' && (
+                                <div className="border-t border-dashed pt-1 mt-1 space-y-1 text-right">
+                                    <div className="flex justify-between text-xs">
+                                        <span>Paid Now</span>
+                                        <span>₹{(bill.paidAmount || 0).toFixed(0)}</span>
+                                    </div>
+                                    <div className="flex justify-between text-xs font-bold">
+                                        <span>Bill Due</span>
+                                        <span>₹{(bill.totalAmount - (bill.paidAmount || 0)).toFixed(0)}</span>
+                                    </div>
+                                    {party && (
+                                        <div className="flex justify-between text-sm font-bold border-t border-dashed pt-1">
+                                            <span>Net Balance</span>
+                                            <span>₹{party.balance.toFixed(0)}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
                             {localStorage.getItem('showSavings') !== 'false' && (
                                 <div className="text-center font-bold mt-2 border border-black p-1 rounded">
                                     You Saved: ₹{(
@@ -159,7 +199,7 @@ const PrintBill = () => {
                     </div>
                 </div>
                 <div className="text-right">
-                    <h2 className="text-2xl font-light text-gray-500">INVOICE</h2>
+                    <h2 className="text-2xl font-light text-gray-500">{bill.paymentMode === 'credit' ? 'CREDIT INVOICE' : 'INVOICE'}</h2>
                     <p className="font-bold">#{bill.billNo}</p>
                     <p>Date: {new Date(bill.date).toLocaleDateString()}</p>
                 </div>
@@ -229,6 +269,25 @@ const PrintBill = () => {
                         <span>Total Amount</span>
                         <span>₹{bill.totalAmount.toFixed(2)}</span>
                     </div>
+
+                    {bill.paymentMode === 'credit' && (
+                        <div className="bg-slate-50 p-3 rounded mt-4 text-sm space-y-1">
+                            <div className="flex justify-between text-gray-600">
+                                <span>Paid Amount</span>
+                                <span>₹{(bill.paidAmount || 0).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-red-600">
+                                <span>Balance In Bill</span>
+                                <span>₹{(bill.totalAmount - (bill.paidAmount || 0)).toFixed(2)}</span>
+                            </div>
+                            {party && (
+                                <div className="flex justify-between font-bold border-t border-gray-300 pt-1 mt-1">
+                                    <span>Total Party Due</span>
+                                    <span>₹{party.balance.toFixed(2)}</span>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
             </div>
 
