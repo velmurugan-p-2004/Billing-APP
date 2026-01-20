@@ -164,6 +164,13 @@ const Inventory = () => {
         }
     };
 
+    const handleDeleteCategory = async () => {
+        if (formData.categoryId && confirm('Delete this category? Items in this category will need reassignment.')) {
+            await db.categories.delete(formData.categoryId);
+            setFormData({ ...formData, categoryId: undefined });
+        }
+    };
+
     const handleEdit = (item: Item) => {
         setFormData(item);
         setEditingId(item.id || null);
@@ -283,24 +290,36 @@ const Inventory = () => {
 
                         <div>
                             <label className="text-sm font-medium">Category <span className="text-red-500">*</span></label>
-                            <select
-                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                                value={formData.categoryId || ''}
-                                onChange={e => {
-                                    if (e.target.value === 'add_new') {
-                                        setCategoryFormData(prev => ({ ...prev, profileId: formData.profileId }));
-                                        setIsAddingCategory(true);
-                                    } else {
-                                        setFormData({ ...formData, categoryId: Number(e.target.value) });
-                                    }
-                                }}
-                            >
-                                <option value="">Select Category</option>
-                                {categories?.filter(c => c.profileId === formData.profileId).map(c => (
-                                    <option key={c.id} value={c.id}>{c.name} ({c.sku})</option>
-                                ))}
-                                <option value="add_new" style={{ fontWeight: 'bold', color: '#2563eb' }}>+ Add New Category</option>
-                            </select>
+                            <div className="flex gap-2">
+                                <select
+                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                    value={formData.categoryId || ''}
+                                    onChange={e => {
+                                        if (e.target.value === 'add_new') {
+                                            setCategoryFormData(prev => ({ ...prev, profileId: formData.profileId }));
+                                            setIsAddingCategory(true);
+                                        } else {
+                                            setFormData({ ...formData, categoryId: Number(e.target.value) });
+                                        }
+                                    }}
+                                >
+                                    <option value="">Select Category</option>
+                                    {categories?.filter(c => c.profileId === formData.profileId).map(c => (
+                                        <option key={c.id} value={c.id}>{c.name} ({c.sku})</option>
+                                    ))}
+                                    <option value="add_new" className="font-bold text-blue-600">+ Add New Category</option>
+                                </select>
+                                <Button
+                                    variant="destructive"
+                                    size="icon"
+                                    onClick={handleDeleteCategory}
+                                    disabled={!formData.categoryId}
+                                    title="Delete Selected Category"
+                                    type="button"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </Button>
+                            </div>
                             <p className="text-xs text-gray-500 mt-1">Items are grouped by category</p>
                         </div>
 
@@ -401,66 +420,70 @@ const Inventory = () => {
                             </Button>
                         </div>
                     </div>
-                </div>
+                </div >
             )}
 
-            {isScanning && (
-                <Scanner onScan={handleScan} onClose={() => setIsScanning(false)} />
-            )}
+            {
+                isScanning && (
+                    <Scanner onScan={handleScan} onClose={() => setIsScanning(false)} />
+                )
+            }
 
             {/* Quick Add Category Modal */}
-            {isAddingCategory && (
-                <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg w-full max-w-md p-6 space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-lg font-bold">Add New Category</h3>
-                            <Button variant="ghost" size="icon" onClick={() => setIsAddingCategory(false)}>
-                                <X className="w-5 h-5" />
-                            </Button>
-                        </div>
-
-                        <div className="space-y-3">
-                            <div>
-                                <label className="text-sm font-medium">Category Name *</label>
-                                <Input
-                                    placeholder="e.g., Mens T-Shirts"
-                                    value={categoryFormData.name}
-                                    onChange={e => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
-                                />
+            {
+                isAddingCategory && (
+                    <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
+                        <div className="bg-white rounded-lg w-full max-w-md p-6 space-y-4">
+                            <div className="flex justify-between items-center">
+                                <h3 className="text-lg font-bold">Add New Category</h3>
+                                <Button variant="ghost" size="icon" onClick={() => setIsAddingCategory(false)}>
+                                    <X className="w-5 h-5" />
+                                </Button>
                             </div>
 
-                            <div>
-                                <label className="text-sm font-medium">Category SKU *</label>
-                                <Input
-                                    placeholder="e.g., TSH-001"
-                                    value={categoryFormData.sku}
-                                    onChange={e => setCategoryFormData({ ...categoryFormData, sku: e.target.value })}
-                                />
-                                <p className="text-xs text-gray-500 mt-1">This SKU will be used to scan all items in this category</p>
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-sm font-medium">Category Name *</label>
+                                    <Input
+                                        placeholder="e.g., Mens T-Shirts"
+                                        value={categoryFormData.name}
+                                        onChange={e => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="text-sm font-medium">Category SKU *</label>
+                                    <Input
+                                        placeholder="e.g., TSH-001"
+                                        value={categoryFormData.sku}
+                                        onChange={e => setCategoryFormData({ ...categoryFormData, sku: e.target.value })}
+                                    />
+                                    <p className="text-xs text-gray-500 mt-1">This SKU will be used to scan all items in this category</p>
+                                </div>
+
+                                <div>
+                                    <label className="text-sm font-medium">Description (Optional)</label>
+                                    <Input
+                                        placeholder="Brief description"
+                                        value={categoryFormData.description}
+                                        onChange={e => setCategoryFormData({ ...categoryFormData, description: e.target.value })}
+                                    />
+                                </div>
                             </div>
 
-                            <div>
-                                <label className="text-sm font-medium">Description (Optional)</label>
-                                <Input
-                                    placeholder="Brief description"
-                                    value={categoryFormData.description}
-                                    onChange={e => setCategoryFormData({ ...categoryFormData, description: e.target.value })}
-                                />
+                            <div className="flex gap-2 pt-2">
+                                <Button variant="outline" className="flex-1" onClick={() => setIsAddingCategory(false)}>
+                                    Cancel
+                                </Button>
+                                <Button className="flex-1 bg-slate-900 text-white hover:bg-slate-800" onClick={handleSaveCategory}>
+                                    Save Category
+                                </Button>
                             </div>
-                        </div>
-
-                        <div className="flex gap-2 pt-2">
-                            <Button variant="outline" className="flex-1" onClick={() => setIsAddingCategory(false)}>
-                                Cancel
-                            </Button>
-                            <Button className="flex-1 bg-slate-900 text-white hover:bg-slate-800" onClick={handleSaveCategory}>
-                                Save Category
-                            </Button>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 
