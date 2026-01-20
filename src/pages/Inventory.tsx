@@ -5,19 +5,17 @@ import { db, Item, Category } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, ScanLine, X, Edit, Trash2, Tag, Package } from 'lucide-react';
+import { Plus, Search, ScanLine, X, Edit, Trash2 } from 'lucide-react';
 import Scanner from '@/components/Scanner';
 
 const Inventory = () => {
     const { t } = useTranslation();
-    const [activeTab, setActiveTab] = useState<'items' | 'categories'>('items');
     const [searchQuery, setSearchQuery] = useState('');
     const [isAdding, setIsAdding] = useState(false);
     const [isAddingCategory, setIsAddingCategory] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
-    const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
-    const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<number | null>(null);
+    const [selectedCategoryFilter] = useState<number | null>(null);
     const [selectedProfileId, setSelectedProfileId] = useState<number | null>(() => {
         const saved = localStorage.getItem('defaultProfileId');
         return saved ? Number(saved) : null;
@@ -73,8 +71,8 @@ const Inventory = () => {
             if (searchQuery) {
                 return query.filter(item =>
                     item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                    (item.sku && item.sku.includes(searchQuery)) ||
-                    (item.variant && item.variant.toLowerCase().includes(searchQuery.toLowerCase()))
+                    (!!item.sku && item.sku.includes(searchQuery)) ||
+                    (!!item.variant && item.variant.toLowerCase().includes(searchQuery.toLowerCase()))
                 ).toArray();
             }
 

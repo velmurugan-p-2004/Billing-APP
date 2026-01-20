@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db, Profile } from '@/db/db';
-import { GoogleDriveSync } from '@/components/GoogleDriveSync';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -18,7 +17,7 @@ const Settings = () => {
     const [connectionType, setConnectionType] = useState(localStorage.getItem('printerConnectionType') || 'usb');
     const [btDeviceName, setBtDeviceName] = useState(localStorage.getItem('bluetoothDeviceName') || '');
     const [backupConfig, setBackupConfig] = useState<AutoBackupConfig>(getBackupConfig());
-    const [lastBackup, setLastBackup] = useState<string | null>(getLastBackupTime());
+    const [lastBackup] = useState<string | null>(getLastBackupTime());
     const [showBackupModal, setShowBackupModal] = useState(false);
     const [backupProfileId, setBackupProfileId] = useState<string>('all');
     const [isPwaFolderSet, setIsPwaFolderSet] = useState(false);
