@@ -6,7 +6,7 @@ import { db, Item, BillItem, Category, Party } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Plus, Minus, Trash2, ScanLine, Search, UserPlus } from 'lucide-react';
+import { Plus, Minus, Trash2, ScanLine, UserPlus } from 'lucide-react';
 import Scanner from '@/components/Scanner';
 import { QRCodeSVG } from 'qrcode.react';
 import PrintModal from '@/components/PrintModal';
