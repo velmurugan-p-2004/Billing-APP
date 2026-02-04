@@ -89,7 +89,7 @@ const HistoryPage = () => {
     };
 
     return (
-        <div className="p-4 space-y-4 pb-24 max-w-md mx-auto">
+        <div className="p-4 space-y-4 pb-24 w-full lg:max-w-7xl xl:max-w-full mx-auto lg:px-6 xl:px-8">
             <div className="flex justify-between items-center">
                 <h1 className="text-2xl font-bold">Bill History</h1>
                 <select
@@ -138,51 +138,191 @@ const HistoryPage = () => {
             </div>
 
             <div className="space-y-3">
-                {bills?.map((bill) => (
-                    <Card key={bill.id} className="overflow-hidden">
-                        <CardContent className="p-3 flex justify-between items-center">
-                            <div>
-                                <div className="font-semibold flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-blue-500" />
-                                    Bill #{bill.billNo}
-                                </div>
-                                <div className="text-sm text-gray-600">
-                                    {new Date(bill.date).toLocaleDateString()} - {new Date(bill.date).toLocaleTimeString()}
-                                </div>
-                                <div className="text-sm font-medium">
-                                    {bill.customerName || 'Walk-in Customer'}
-                                </div>
-                            </div>
-                            <div className="flex flex-col items-end gap-2">
-                                <span className="font-bold text-lg">₹{bill.totalAmount}</span>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs px-2 py-1 bg-slate-100 rounded uppercase">
-                                        {bill.paymentMode}
-                                    </span>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handlePrint(bill)}>
-                                        <Printer className="w-4 h-4" />
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
-                                        onClick={() => navigate('/billing', { state: { editBill: bill } })}
-                                    >
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
-                                        onClick={() => handleDelete(bill)}
-                                    >
-                                        <Trash2 className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                ))}
+                {/* Today's Bills */}
+                {bills?.some(bill => {
+                    const billDate = new Date(bill.date);
+                    const today = new Date();
+                    return billDate.toDateString() === today.toDateString();
+                }) && (
+                    <div>
+                        <h3 className="text-sm font-bold text-gray-600 mb-2 px-1">Today</h3>
+                        {bills?.filter(bill => {
+                            const billDate = new Date(bill.date);
+                            const today = new Date();
+                            return billDate.toDateString() === today.toDateString();
+                        }).map((bill) => (
+                            <Card key={bill.id} className="overflow-hidden mb-2">
+                                <CardContent className="p-3 flex justify-between items-center">
+                                    <div>
+                                        <div className="font-semibold flex items-center gap-2">
+                                            <FileText className="w-4 h-4 text-blue-500" />
+                                            Bill #{bill.billNo}
+                                        </div>
+                                        <div className="text-sm text-gray-600">
+                                            {new Date(bill.date).toLocaleDateString()} - {new Date(bill.date).toLocaleTimeString()}
+                                        </div>
+                                        <div className="text-sm font-medium">
+                                            {bill.customerName || 'Walk-in Customer'}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <span className="font-bold text-lg">₹{bill.totalAmount}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs px-2 py-1 bg-slate-100 rounded uppercase">
+                                                {bill.paymentMode}
+                                            </span>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handlePrint(bill)}>
+                                                <Printer className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                                                onClick={() => navigate('/billing', { state: { editBill: bill } })}
+                                            >
+                                                Edit
+                                            </Button>
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                onClick={() => handleDelete(bill)}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )}
+
+                {/* Yesterday's Bills */}
+                {bills?.some(bill => {
+                    const billDate = new Date(bill.date);
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    return billDate.toDateString() === yesterday.toDateString();
+                }) && (
+                    <div>
+                        <h3 className="text-sm font-bold text-gray-600 mb-2 px-1">Yesterday</h3>
+                        {bills?.filter(bill => {
+                            const billDate = new Date(bill.date);
+                            const yesterday = new Date();
+                            yesterday.setDate(yesterday.getDate() - 1);
+                            return billDate.toDateString() === yesterday.toDateString();
+                        }).map((bill) => (
+                            <Card key={bill.id} className="overflow-hidden mb-2">
+                                <CardContent className="p-3 flex justify-between items-center">
+                                    <div>
+                                        <div className="font-semibold flex items-center gap-2">
+                                            <FileText className="w-4 h-4 text-blue-500" />
+                                            Bill #{bill.billNo}
+                                        </div>
+                                        <div className="text-sm text-gray-600">
+                                            {new Date(bill.date).toLocaleDateString()} - {new Date(bill.date).toLocaleTimeString()}
+                                        </div>
+                                        <div className="text-sm font-medium">
+                                            {bill.customerName || 'Walk-in Customer'}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <span className="font-bold text-lg">₹{bill.totalAmount}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs px-2 py-1 bg-slate-100 rounded uppercase">
+                                                {bill.paymentMode}
+                                            </span>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handlePrint(bill)}>
+                                                <Printer className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                                                onClick={() => navigate('/billing', { state: { editBill: bill } })}
+                                            >
+                                                Edit
+                                            </Button>
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                onClick={() => handleDelete(bill)}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )}
+
+                {/* Older Bills */}
+                {bills?.some(bill => {
+                    const billDate = new Date(bill.date);
+                    const today = new Date();
+                    const yesterday = new Date();
+                    yesterday.setDate(yesterday.getDate() - 1);
+                    return billDate.toDateString() !== today.toDateString() && billDate.toDateString() !== yesterday.toDateString();
+                }) && (
+                    <div>
+                        <h3 className="text-sm font-bold text-gray-600 mb-2 px-1">Older</h3>
+                        {bills?.filter(bill => {
+                            const billDate = new Date(bill.date);
+                            const today = new Date();
+                            const yesterday = new Date();
+                            yesterday.setDate(yesterday.getDate() - 1);
+                            return billDate.toDateString() !== today.toDateString() && billDate.toDateString() !== yesterday.toDateString();
+                        }).map((bill) => (
+                            <Card key={bill.id} className="overflow-hidden mb-2">
+                                <CardContent className="p-3 flex justify-between items-center">
+                                    <div>
+                                        <div className="font-semibold flex items-center gap-2">
+                                            <FileText className="w-4 h-4 text-blue-500" />
+                                            Bill #{bill.billNo}
+                                        </div>
+                                        <div className="text-sm text-gray-600">
+                                            {new Date(bill.date).toLocaleDateString()} - {new Date(bill.date).toLocaleTimeString()}
+                                        </div>
+                                        <div className="text-sm font-medium">
+                                            {bill.customerName || 'Walk-in Customer'}
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-2">
+                                        <span className="font-bold text-lg">₹{bill.totalAmount}</span>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs px-2 py-1 bg-slate-100 rounded uppercase">
+                                                {bill.paymentMode}
+                                            </span>
+                                            <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handlePrint(bill)}>
+                                                <Printer className="w-4 h-4" />
+                                            </Button>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 text-xs text-blue-600 border-blue-200 hover:bg-blue-50"
+                                                onClick={() => navigate('/billing', { state: { editBill: bill } })}
+                                            >
+                                                Edit
+                                            </Button>
+                                            <Button
+                                                size="icon"
+                                                variant="ghost"
+                                                className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"
+                                                onClick={() => handleDelete(bill)}
+                                            >
+                                                <Trash2 className="w-4 h-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                )}
 
                 {bills?.length === 0 && (
                     <div className="text-center py-8 text-gray-500">

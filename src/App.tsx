@@ -11,6 +11,7 @@ import PartiesPage from './pages/PartiesPage';
 import { InstallPWA } from './components/InstallPWA';
 import { WifiOff } from 'lucide-react';
 import { checkAndPerformBackup } from './utils/backupManager';
+import { initializePrinter } from './utils/PrinterInitializer';
 
 function App() {
     const [isOffline, setIsOffline] = useState(!navigator.onLine);
@@ -24,6 +25,9 @@ function App() {
 
         // Initial Backup Check
         checkAndPerformBackup();
+
+        // Bluetooth Printer Auto-Connect (Vyapar-style)
+        initializePrinter();
 
         // Periodic Check (every 1 minute) to handle if app stays open
         const backupInterval = setInterval(() => {

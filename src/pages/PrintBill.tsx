@@ -2,6 +2,7 @@ import { useEffect, useRef, Fragment } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db } from '@/db/db';
+import { QRCodeSVG } from 'qrcode.react';
 // import { cn } from '@/lib/utils';
 
 const PrintBill = () => {
@@ -44,7 +45,7 @@ const PrintBill = () => {
 
     // Styles for 58mm Thermal
     if (template === 'simple') {
-        const defaultOrder = ['logo', 'shopName', 'description', 'address', 'phone', 'billMeta', 'items', 'totals', 'footer'];
+        const defaultOrder = ['logo', 'shopName', 'description', 'address', 'phone', 'billMeta', 'items', 'totals', 'qrcode', 'footer'];
         const savedOrder = localStorage.getItem('billLayoutOrder');
         const order = savedOrder ? JSON.parse(savedOrder) : defaultOrder;
 
@@ -80,8 +81,14 @@ const PrintBill = () => {
                                 <span>Bill: {bill.billNo}</span>
                                 <span>{new Date(bill.date).toLocaleDateString()}</span>
                             </div>
+                            {bill.customerName && (
+                                <div className="text-left mt-1">
+                                    <span className="text-[10px] text-gray-600">Customer: </span>
+                                    <span className="font-semibold">{bill.customerName}</span>
+                                </div>
+                            )}
                             {bill.paymentMode === 'credit' && (
-                                <div className="text-center font-bold mt-1">CREDIT BILL</div>
+                                <div className="text-center font-bold mt-1">CASH/CREDIT BILL</div>
                             )}
                         </>
                     );
@@ -101,7 +108,10 @@ const PrintBill = () => {
                             {bill.items.map((item, i) => (
                                 <div key={i} className="flex items-center text-[11px]">
                                     <span className="w-6">{item.quantity}</span>
-                                    <span className="flex-1 truncate">{item.name}</span>
+                                    <span className="flex-1 truncate">
+                                        {item.name}
+                                        {item.unit && <span className="text-[9px] text-gray-600"> ({item.unit})</span>}
+                                    </span>
                                     {localStorage.getItem('showMrp') !== 'false' && <span className="w-10 text-right text-gray-500">{item.mrp}</span>}
                                     <span className="w-12 text-right font-bold">{(item.price * item.quantity).toFixed(0)}</span>
                                 </div>
@@ -158,11 +168,25 @@ const PrintBill = () => {
                             )}
                         </>
                     );
+                case 'qrcode':
+                    const upiId = localStorage.getItem('upiId');
+                    return localStorage.getItem('showQrCode') !== 'false' && upiId ? (
+                        <div className="flex flex-col items-center mt-3 mb-2">
+                            <div className="text-[10px] font-bold mb-1">Scan to Pay</div>
+                            <QRCodeSVG
+                                value={`upi://pay?pa=${upiId}&pn=${encodeURIComponent(profile.businessName)}&am=${bill.totalAmount.toFixed(2)}&cu=INR`}
+                                size={96}
+                                level="M"
+                                includeMargin={true}
+                            />
+                            <div className="text-[9px] text-gray-600 mt-1">₹{bill.totalAmount.toFixed(0)}</div>
+                        </div>
+                    ) : null;
                 case 'footer':
                     return localStorage.getItem('showFooter') !== 'false' ? (
                         <>
                             <div className="text-center mt-4">{localStorage.getItem('footerMessage') || '*** Thank You ***'}</div>
-                            <div className="text-center text-[10px] text-gray-500">Provided by Seematti Billing</div>
+                            <div className="text-center text-[10px] text-gray-500">Provided by Bill Podu</div>
                         </>
                     ) : null;
                 default:
@@ -205,10 +229,12 @@ const PrintBill = () => {
                 </div>
             </div>
 
-            <div className="mb-8">
-                <p className="text-gray-600 text-sm">Bill To:</p>
-                <p className="font-bold text-lg">{bill.customerName || 'Walk-in Customer'}</p>
-            </div>
+            {bill.customerName && (
+                <div className="mb-8">
+                    <p className="text-gray-600 text-sm">Bill To:</p>
+                    <p className="font-bold text-lg">{bill.customerName}</p>
+                </div>
+            )}
 
             <table className="w-full mb-8">
                 <thead>
@@ -224,6 +250,7 @@ const PrintBill = () => {
                         <tr key={i}>
                             <td className="p-3 font-medium">
                                 {item.name}
+                                {item.unit && <span className="text-xs text-blue-600 ml-1">({item.unit})</span>}
                                 {item.mrp > item.price && localStorage.getItem('showMrp') !== 'false' && (
                                     <div className="text-xs text-green-600">MRP: ₹{item.mrp}</div>
                                 )}
@@ -293,7 +320,23 @@ const PrintBill = () => {
                 </div>
             </div>
 
-            <div className="mt-16 text-center text-gray-500 text-sm">
+            {localStorage.getItem('showQrCode') !== 'false' && localStorage.getItem('upiId') && (
+                <div className="flex justify-center items-center mt-8 mb-8 border-t pt-8">
+                    <div className="text-center">
+                        <p className="font-bold text-gray-700 mb-2">Scan to Pay</p>
+                        <QRCodeSVG
+                            value={`upi://pay?pa=${localStorage.getItem('upiId')}&pn=${encodeURIComponent(profile.businessName)}&am=${bill.totalAmount.toFixed(2)}&cu=INR`}
+                            size={160}
+                            level="M"
+                            includeMargin={true}
+                        />
+                        <p className="text-sm text-gray-600 mt-2">Amount: ₹{bill.totalAmount.toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">{localStorage.getItem('upiId')}</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="mt-8 text-center text-gray-500 text-sm">
                 <p>{localStorage.getItem('footerMessage') || 'Thank you for your business!'}</p>
             </div>
         </div>

@@ -326,7 +326,7 @@ export const GoogleDriveSync = () => {
               <ul className="text-xs text-gray-600 space-y-1">
                 <li>• All bills (bills.json)</li>
                 <li>• All inventory items (inventory.json)</li>
-                <li>• Stored in "Seematti Billing Data" folder</li>
+                <li>• Stored in "Bill Podu Data" folder</li>
                 <li>• Automatically synced on every change</li>
               </ul>
             </div>

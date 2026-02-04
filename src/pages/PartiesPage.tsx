@@ -4,7 +4,7 @@ import { db, Party } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, User, Edit, Phone, FileText, Trash2 } from 'lucide-react';
+import { Plus, Search, User, Edit, Phone, FileText, Trash2, Printer } from 'lucide-react';
 
 const PartiesPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -82,6 +82,169 @@ const PartiesPage = () => {
     const [transactionAmount, setTransactionAmount] = useState('');
     const [transactionType, setTransactionType] = useState<'payment' | 'charge'>('payment');
     const [selectedPartyForTransaction, setSelectedPartyForTransaction] = useState<Party | null>(null);
+    const [isPrinting, setIsPrinting] = useState<number | null>(null);
+
+    const handlePrintPartyBalance = async (party: Party) => {
+        setIsPrinting(party.id!);
+        try {
+            const { BluetoothService } = await import('@/utils/BluetoothService');
+            const { EscPos } = await import('@/utils/EscPos');
+
+            // Ensure printer is connected
+            const isConnected = await BluetoothService.isConnected();
+            if (!isConnected) {
+                const autoConnected = await BluetoothService.autoConnect();
+                if (!autoConnected) {
+                    alert('Printer not connected. Please pair a printer first.');
+                    setIsPrinting(null);
+                    return;
+                }
+            }
+
+            const encoder = new EscPos();
+            const paperWidth = localStorage.getItem('printerPaperSize') || '58mm';
+            const maxChars = paperWidth === '80mm' ? 48 : 32;
+
+            // Get font settings
+            const headerFontSize = localStorage.getItem('headerFontSize') || 'normal';
+            const itemsFontSize = localStorage.getItem('itemsFontSize') || 'normal';
+            const footerFontSize = localStorage.getItem('footerFontSize') || 'normal';
+            const boldHeader = localStorage.getItem('boldHeader') !== 'false';
+            const boldItems = localStorage.getItem('boldItems') === 'true';
+            const boldFooter = localStorage.getItem('boldFooter') === 'true';
+
+            // Get profile
+            const profiles = await db.profiles.toArray();
+            const businessProfile = selectedProfileId 
+                ? profiles.find(p => p.id === selectedProfileId) || profiles[0]
+                : profiles[0];
+            
+            if (!businessProfile) {
+                alert('No business profile found. Please create one in Settings.');
+                setIsPrinting(null);
+                return;
+            }
+
+            // Get transaction history
+            const transactions = await db.partyTransactions
+                .where('partyId')
+                .equals(party.id!)
+                .reverse()
+                .sortBy('date');
+
+            // Header
+            encoder.align('CENTER');
+            if (boldHeader) encoder.bold(true);
+            if (headerFontSize === 'large') encoder.size('LARGE');
+            encoder.textLine(businessProfile.businessName);
+            encoder.size('NORMAL');
+            if (boldHeader) encoder.bold(false);
+
+            if (businessProfile.phone) {
+                if (boldHeader) encoder.bold(true);
+                if (headerFontSize === 'large') encoder.size('LARGE');
+                encoder.textLine(businessProfile.phone);
+                encoder.size('NORMAL');
+                if (boldHeader) encoder.bold(false);
+            }
+
+            encoder.textLine('='.repeat(maxChars));
+            if (boldHeader) encoder.bold(true);
+            if (headerFontSize === 'large') encoder.size('LARGE');
+            encoder.textLine('PARTY STATEMENT');
+            encoder.size('NORMAL');
+            if (boldHeader) encoder.bold(false);
+            encoder.textLine('='.repeat(maxChars));
+
+            // Party Details
+            encoder.align('LEFT');
+            encoder.textLine(`Party: ${party.name}`);
+            encoder.textLine(`Phone: ${party.mobile}`);
+            if (party.aadhar) {
+                encoder.textLine(`ID: ${party.aadhar}`);
+            }
+            encoder.textLine(`Date: ${new Date().toLocaleDateString()}`);
+            encoder.textLine('-'.repeat(maxChars));
+
+            // Current Balance
+            encoder.bold(true)
+                .size('LARGE')
+                .align('CENTER');
+            const balanceText = party.balance >= 0 ? 'BALANCE DUE' : 'ADVANCE';
+            encoder.textLine(balanceText);
+            encoder.textLine(`Rs${Math.abs(party.balance).toFixed(0)}`);
+            encoder.size('NORMAL')
+                .bold(false)
+                .align('LEFT');
+            encoder.textLine('='.repeat(maxChars));
+
+            // Transaction History
+            if (transactions && transactions.length > 0) {
+                encoder.bold(true).textLine('TRANSACTION HISTORY').bold(false);
+                encoder.textLine('-'.repeat(maxChars));
+
+                // Header row
+                const dateW = 9;
+                const typeW = maxChars - dateW - 10;
+                const amtW = 10;
+                const headerLine = 'Date'.padEnd(dateW) + 'Type'.padEnd(typeW) + 'Amount'.padStart(amtW);
+                if (boldItems) encoder.bold(true);
+                if (itemsFontSize === 'large') encoder.size('LARGE');
+                encoder.textLine(headerLine);
+                encoder.size('NORMAL');
+                if (boldItems) encoder.bold(false);
+                encoder.textLine('-'.repeat(maxChars));
+
+                // Transaction rows (last 15)
+                const recentTx = transactions.slice(0, 15);
+                for (const tx of recentTx) {
+                    const date = new Date(tx.date).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit' });
+                    const typeLabel = tx.type === 'CREDIT_BILL' ? 'Bill' : tx.type === 'PAYMENT' ? 'Paid' : 'Charge';
+                    const sign = tx.type === 'PAYMENT' ? '-' : '+';
+                    const amt = `${sign}${tx.amount.toFixed(0)}`;
+
+                    const txLine = date.padEnd(dateW) + typeLabel.padEnd(typeW) + amt.padStart(amtW);
+                    if (itemsFontSize === 'large') encoder.size('LARGE');
+                    encoder.textLine(txLine);
+                    encoder.size('NORMAL');
+                }
+
+                if (transactions.length > 15) {
+                    encoder.textLine('-'.repeat(maxChars));
+                    encoder.align('CENTER');
+                    if (itemsFontSize === 'large') encoder.size('LARGE');
+                    encoder.textLine(`(${transactions.length - 15} more transactions)`);
+                    encoder.size('NORMAL');
+                    encoder.align('LEFT');
+                }
+            } else {
+                encoder.align('CENTER');
+                if (itemsFontSize === 'large') encoder.size('LARGE');
+                encoder.textLine('No transactions yet');
+                encoder.size('NORMAL');
+                encoder.align('LEFT');
+            }
+
+            encoder.textLine('='.repeat(maxChars));
+            encoder.align('CENTER');
+            if (boldFooter) encoder.bold(true);
+            if (footerFontSize === 'large') encoder.size('LARGE');
+            encoder.textLine('*** Thank You ***');
+            encoder.size('NORMAL');
+            if (boldFooter) encoder.bold(false);
+            encoder.feed(3).cut();
+
+            // Print
+            const bytes = encoder.getBytes();
+            await BluetoothService.write(bytes);
+
+            setIsPrinting(null);
+        } catch (error) {
+            console.error('Print error:', error);
+            alert(`Failed to print: ${error}`);
+            setIsPrinting(null);
+        }
+    };
 
     const handleTransaction = async () => {
         if (!selectedPartyForTransaction || !transactionAmount) return;
@@ -120,7 +283,7 @@ const PartiesPage = () => {
     };
 
     return (
-        <div className="p-4 space-y-4 pb-24 max-w-md mx-auto">
+        <div className="p-4 space-y-4 pb-24 w-full lg:max-w-7xl xl:max-w-full mx-auto lg:px-6 xl:px-8">
             <div className="flex justify-between items-center gap-2">
                 <h1 className="text-2xl font-bold">Parties</h1>
                 <select
@@ -156,47 +319,58 @@ const PartiesPage = () => {
             <div className="space-y-3">
                 {parties?.map((party) => (
                     <Card key={party.id} className="overflow-hidden">
-                        <CardContent className="p-4 flex justify-between items-center">
-                            <div>
-                                <div className="font-bold text-lg flex items-center gap-2">
-                                    <User className="w-4 h-4 text-blue-500" />
-                                    {party.name}
+                        <CardContent className="p-4">
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="flex-1 min-w-0">
+                                    <div className="font-bold text-lg flex items-center gap-2">
+                                        <User className="w-4 h-4 text-blue-500 flex-shrink-0" />
+                                        <span className="truncate">{party.name}</span>
+                                    </div>
+                                    <div className="text-sm text-gray-500 flex items-center gap-1">
+                                        <Phone className="w-3 h-3 flex-shrink-0" /> {party.mobile}
+                                    </div>
+                                    {party.aadhar && <div className="text-xs text-gray-400 mt-1">ID: {party.aadhar}</div>}
                                 </div>
-                                <div className="text-sm text-gray-500 flex items-center gap-1">
-                                    <Phone className="w-3 h-3" /> {party.mobile}
+                                <div className="text-right flex-shrink-0 ml-4">
+                                    <div className={`font-bold text-lg ${party.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                        ₹{party.balance.toFixed(2)}
+                                    </div>
+                                    <div className="text-[10px] text-gray-400 uppercase">Balance</div>
                                 </div>
-                                {party.aadhar && <div className="text-xs text-gray-400 mt-1">ID: {party.aadhar}</div>}
                             </div>
-                            <div className="text-right">
-                                <div className={`font-bold text-lg ${party.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                                    ₹{party.balance.toFixed(2)}
-                                </div>
-                                <div className="text-[10px] text-gray-400 uppercase mb-2">Balance</div>
-                                <div className="flex gap-2 justify-end">
-                                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedPartyForHistory(party.id!)}>
-                                        <FileText className="w-3 h-3 text-gray-500" />
-                                    </Button>
-                                    <Button size="sm" variant="default" className="h-7 text-xs bg-red-600 hover:bg-red-700" onClick={() => {
-                                        setSelectedPartyForTransaction(party);
-                                        setTransactionType('charge');
-                                        setShowTransactionModal(true);
-                                    }}>
-                                        Add
-                                    </Button>
-                                    <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => {
-                                        setSelectedPartyForTransaction(party);
-                                        setTransactionType('payment');
-                                        setShowTransactionModal(true);
-                                    }}>
-                                        Pay
-                                    </Button>
-                                    <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleEdit(party)}>
-                                        <Edit className="w-3 h-3" />
-                                    </Button>
-                                    <Button size="sm" variant="outline" className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeleteParty(party.id!)}>
-                                        <Trash2 className="w-3 h-3" />
-                                    </Button>
-                                </div>
+                            <div className="flex flex-wrap gap-2 justify-end">
+                                <Button 
+                                    size="sm" 
+                                    variant="ghost" 
+                                    className="h-7 text-xs" 
+                                    onClick={() => handlePrintPartyBalance(party)}
+                                    disabled={isPrinting === party.id}
+                                >
+                                    <Printer className="w-3 h-3 text-blue-500" />
+                                </Button>
+                                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedPartyForHistory(party.id!)}>
+                                    <FileText className="w-3 h-3 text-gray-500" />
+                                </Button>
+                                <Button size="sm" variant="default" className="h-7 text-xs bg-red-600 hover:bg-red-700" onClick={() => {
+                                    setSelectedPartyForTransaction(party);
+                                    setTransactionType('charge');
+                                    setShowTransactionModal(true);
+                                }}>
+                                    Add
+                                </Button>
+                                <Button size="sm" variant="default" className="h-7 text-xs bg-green-600 hover:bg-green-700" onClick={() => {
+                                    setSelectedPartyForTransaction(party);
+                                    setTransactionType('payment');
+                                    setShowTransactionModal(true);
+                                }}>
+                                    Pay
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleEdit(party)}>
+                                    <Edit className="w-3 h-3" />
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeleteParty(party.id!)}>
+                                    <Trash2 className="w-3 h-3" />
+                                </Button>
                             </div>
                         </CardContent>
                     </Card>

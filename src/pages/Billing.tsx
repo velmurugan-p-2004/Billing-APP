@@ -6,7 +6,7 @@ import { db, Item, BillItem, Category, Party } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Plus, Minus, Trash2, ScanLine, UserPlus } from 'lucide-react';
+import { Plus, Minus, Trash2, ScanLine, UserPlus, Pause, Play, List, X } from 'lucide-react';
 import Scanner from '@/components/Scanner';
 import { QRCodeSVG } from 'qrcode.react';
 import PrintModal from '@/components/PrintModal';
@@ -16,11 +16,18 @@ const Billing = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
     const [cart, setCart] = useState<BillItem[]>([]);
+    const [lastAddedItemId, setLastAddedItemId] = useState<number | null>(null);
     const [customerName, setCustomerName] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [isScanning, setIsScanning] = useState(false);
     const [selectedProfileId, setSelectedProfileId] = useState<number | null>(null);
     const [showPayment, setShowPayment] = useState(false);
+    const [billDateTime, setBillDateTime] = useState<string>(() => {
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        const localISOTime = new Date(now.getTime() - offset).toISOString().slice(0, 16);
+        return localISOTime;
+    });
 
     const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'credit'>('cash');
     const [lastBillId, setLastBillId] = useState<number | null>(null);
@@ -35,6 +42,41 @@ const Billing = () => {
     const [newPartyAadhar, setNewPartyAadhar] = useState('');
     const [newPartyProfileId, setNewPartyProfileId] = useState<number | undefined>(undefined);
     const [showNewPartyForm, setShowNewPartyForm] = useState(false);
+
+    // Hold Bill State - Persist in localStorage
+    const [heldBills, setHeldBills] = useState<Array<{
+        id: string;
+        cart: BillItem[];
+        customerName: string;
+        selectedParty: Party | null;
+        paymentMode: 'cash' | 'upi' | 'credit';
+        discount: number;
+        discountType: 'amount' | 'percentage';
+        timestamp: Date;
+    }>>(() => {
+        // Load held bills from localStorage on mount
+        const saved = localStorage.getItem('heldBills');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                // Convert timestamp strings back to Date objects
+                return parsed.map((bill: any) => ({
+                    ...bill,
+                    timestamp: new Date(bill.timestamp)
+                }));
+            } catch (error) {
+                console.error('Failed to parse held bills:', error);
+                return [];
+            }
+        }
+        return [];
+    });
+    const [showHeldBillsModal, setShowHeldBillsModal] = useState(false);
+
+    // Save held bills to localStorage whenever they change
+    useEffect(() => {
+        localStorage.setItem('heldBills', JSON.stringify(heldBills));
+    }, [heldBills]);
 
     const profiles = useLiveQuery(() => db.profiles.toArray());
     const items = useLiveQuery(() => {
@@ -83,6 +125,18 @@ const Billing = () => {
         }
     }, [profiles, selectedProfileId]);
 
+    // Apply default discount from selected profile (only once when profile changes)
+    useEffect(() => {
+        if (selectedProfile?.defaultDiscountValue && selectedProfile.defaultDiscountValue > 0) {
+            // Only apply if we don't have items in cart yet
+            if (cart.length === 0) {
+                setDiscount(selectedProfile.defaultDiscountValue);
+                setDiscountType(selectedProfile.defaultDiscountType || 'amount');
+            }
+        }
+    }, [selectedProfileId]); // Only trigger when profile changes, not on discount/cart changes
+
+
     // Check if search query matches a category SKU
     const matchedCategory = searchQuery ? categories?.find(c => c.sku === searchQuery.trim()) : null;
 
@@ -101,6 +155,7 @@ const Billing = () => {
             if (existing) {
                 return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
             }
+            setLastAddedItemId(item.id!);
             return [...prev, { ...item, quantity: 1 }];
         });
         setSearchQuery('');
@@ -197,6 +252,76 @@ const Billing = () => {
         ));
     };
 
+    // Hold Bill Functions
+    const holdCurrentBill = () => {
+        if (cart.length === 0) {
+            alert('No items to hold');
+            return;
+        }
+
+        const heldBill = {
+            id: Date.now().toString(),
+            cart: [...cart],
+            customerName: customerName || (selectedParty?.name) || 'Walk-in Customer',
+            selectedParty: selectedParty,
+            paymentMode,
+            discount,
+            discountType,
+            timestamp: new Date()
+        };
+
+        setHeldBills([...heldBills, heldBill]);
+        
+        // Clear current bill
+        setCart([]);
+        setCustomerName('');
+        setSelectedParty(null);
+        setPaymentMode('cash');
+        setDiscount(0);
+        setSearchQuery('');
+        setPaidAmount(0);
+        
+        alert(`✅ Bill held for ${heldBill.customerName}`);
+    };
+
+    const resumeHeldBill = (heldBillId: string) => {
+        const heldBill = heldBills.find(b => b.id === heldBillId);
+        if (!heldBill) return;
+
+        // Save current bill if it has items
+        if (cart.length > 0) {
+            const currentBill = {
+                id: Date.now().toString(),
+                cart: [...cart],
+                customerName: customerName || (selectedParty?.name) || 'Walk-in Customer',
+                selectedParty: selectedParty,
+                paymentMode,
+                discount,
+                discountType,
+                timestamp: new Date()
+            };
+            setHeldBills([...heldBills.filter(b => b.id !== heldBillId), currentBill]);
+        } else {
+            setHeldBills(heldBills.filter(b => b.id !== heldBillId));
+        }
+
+        // Restore held bill
+        setCart(heldBill.cart);
+        setCustomerName(heldBill.customerName);
+        setSelectedParty(heldBill.selectedParty);
+        setPaymentMode(heldBill.paymentMode);
+        setDiscount(heldBill.discount);
+        setDiscountType(heldBill.discountType);
+        
+        setShowHeldBillsModal(false);
+    };
+
+    const deleteHeldBill = (heldBillId: string) => {
+        if (confirm('Are you sure you want to delete this held bill?')) {
+            setHeldBills(heldBills.filter(b => b.id !== heldBillId));
+        }
+    };
+
 
 
     const location = useLocation();
@@ -210,6 +335,9 @@ const Billing = () => {
             setEditingBillId(bill.id);
             setCart(bill.items);
             setCustomerName(bill.customerName || '');
+            const billDate = new Date(bill.date);
+            const offset = billDate.getTimezoneOffset() * 60000;
+            setBillDateTime(new Date(billDate.getTime() - offset).toISOString().slice(0, 16));
             setPaymentMode(bill.paymentMode || 'cash');
             if (bill.discount) {
                 // Heuristic: if discount is clean float, assume amount, else percentage logic is hard to reverse perfectly without storing type. 
@@ -300,7 +428,7 @@ const Billing = () => {
 
             // Update existing bill
             await db.bills.update(editingBillId, {
-                date: new Date().toISOString(), // Update date to modified time? Or keep original? Typically modified time for returns.
+                date: new Date(billDateTime).toISOString(),
                 customerName,
                 items: cart,
                 totalAmount,
@@ -324,8 +452,10 @@ const Billing = () => {
 
             billId = await db.bills.add({
                 billNo: nextBillNo,
-                date: new Date().toISOString(),
-                customerName: (paymentMode === 'credit' && !selectedParty) ? customerName : (selectedParty ? selectedParty.name : customerName),
+                date: new Date(billDateTime).toISOString(),
+                customerName: paymentMode === 'credit' 
+                    ? (selectedParty ? selectedParty.name : customerName) 
+                    : (customerName || ''),
                 items: cart,
                 totalAmount,
                 paymentMode,
@@ -385,6 +515,9 @@ const Billing = () => {
         setLastBillId(billId as number);
         setCart([]);
         setCustomerName('');
+        const now = new Date();
+        const offset = now.getTimezoneOffset() * 60000;
+        setBillDateTime(new Date(now.getTime() - offset).toISOString().slice(0, 16)); // Reset to current local time
         setDiscount(0);
         setEditingBillId(null);
         setShowPayment(false);
@@ -407,19 +540,50 @@ const Billing = () => {
     };
 
     return (
-        <div className="p-4 pb-24 max-w-md mx-auto min-h-screen relative flex flex-col">
+        <div className="p-4 pb-24 w-full lg:max-w-7xl xl:max-w-full mx-auto min-h-screen relative flex flex-col lg:px-6 xl:px-8">
             <div className="flex justify-between items-center mb-4">
                 <h1 className="text-2xl font-bold">{editingBillId ? 'Edit Bill' : t('billing')}</h1>
-                <select
-                    className="border rounded p-1 text-sm bg-white"
-                    value={selectedProfileId || ''}
-                    onChange={(e) => setSelectedProfileId(Number(e.target.value))}
-                >
-                    <option value="">Select Profile</option>
-                    {profiles?.map(p => (
-                        <option key={p.id} value={p.id}>{p.businessName}</option>
-                    ))}
-                </select>
+                <div className="flex items-center gap-2">
+                    {/* Hold Bill Buttons */}
+                    <Button
+                        onClick={holdCurrentBill}
+                        disabled={cart.length === 0}
+                        variant="outline"
+                        className="bg-yellow-50 hover:bg-yellow-100 border-yellow-300 text-yellow-700 disabled:opacity-50"
+                        size="sm"
+                    >
+                        <Pause className="h-4 w-4 mr-1" />
+                        Hold
+                        {heldBills.length > 0 && (
+                            <span className="ml-1 bg-yellow-500 text-white rounded-full px-1.5 py-0.5 text-xs font-bold">
+                                {heldBills.length}
+                            </span>
+                        )}
+                    </Button>
+
+                    {heldBills.length > 0 && (
+                        <Button
+                            onClick={() => setShowHeldBillsModal(true)}
+                            variant="outline"
+                            className="bg-blue-50 hover:bg-blue-100 border-blue-300 text-blue-700"
+                            size="sm"
+                        >
+                            <List className="h-4 w-4 mr-1" />
+                            {heldBills.length}
+                        </Button>
+                    )}
+                    
+                    <select
+                        className="border rounded p-1 text-sm bg-white"
+                        value={selectedProfileId || ''}
+                        onChange={(e) => setSelectedProfileId(Number(e.target.value))}
+                    >
+                        <option value="">Select Profile</option>
+                        {profiles?.map(p => (
+                            <option key={p.id} value={p.id}>{p.businessName}</option>
+                        ))}
+                    </select>
+                </div>
             </div>
 
             {/* Customer & Search */}
@@ -429,6 +593,15 @@ const Billing = () => {
                     value={customerName}
                     onChange={e => setCustomerName(e.target.value)}
                 />
+                <div>
+                    <label className="text-xs text-gray-600 mb-1 block">Bill Date & Time</label>
+                    <Input
+                        type="datetime-local"
+                        value={billDateTime}
+                        onChange={e => setBillDateTime(e.target.value)}
+                        className="text-sm"
+                    />
+                </div>
                 <div className="flex gap-2">
                     <div className="relative flex-1">
                         <Input
@@ -436,6 +609,7 @@ const Billing = () => {
                             inputMode="numeric"
                             value={searchQuery}
                             onChange={e => setSearchQuery(e.target.value)}
+                            className="border-blue-500 placeholder:text-blue-500"
                             onKeyDown={async (e) => {
                                 if (e.key === 'Enter' && searchQuery.trim()) {
                                     // Check if it's a category SKU
@@ -493,7 +667,10 @@ const Billing = () => {
                     <Card key={index} className="p-2">
                         <div className="flex flex-col gap-2">
                             <div className="flex justify-between items-start">
-                                <div className="font-medium">{item.name}</div>
+                                <div className="font-medium">
+                                    {item.name}
+                                    {item.unit && <span className="text-xs text-blue-600 ml-1">({item.unit})</span>}
+                                </div>
                                 <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => removeItem(item.id!)}>
                                     <Trash2 className="w-3 h-3" />
                                 </Button>
@@ -501,20 +678,31 @@ const Billing = () => {
 
                             <div className="flex justify-between items-center gap-2">
                                 <div className="flex flex-col gap-1 items-end">
-                                    <div className="flex items-center gap-1">
-                                        <span className="text-xs font-bold text-gray-500 w-8 text-right">MRP</span>
+                                    {profiles?.find(p => p.id === selectedProfileId)?.enableMRP && (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-base font-bold text-gray-500 w-12 text-right">MRP</span>
+                                            <Input
+                                                type="number"
+                                                className="h-9 w-28 px-2 py-0 text-right font-bold border-blue-500"
+                                                value={item.mrp || ''}
+                                                onChange={(e) => handleMrpChange(item.id!, e.target.value)}
+                                            />
+                                        </div>
+                                    )}
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-base font-bold text-blue-600 w-12 text-right">Price</span>
                                         <Input
+                                            ref={(el) => {
+                                                if (el && lastAddedItemId === item.id && profiles?.find(p => p.id === selectedProfileId)?.autoPriceEntry) {
+                                                    setTimeout(() => {
+                                                        el.focus();
+                                                        el.select();
+                                                        setLastAddedItemId(null);
+                                                    }, 100);
+                                                }
+                                            }}
                                             type="number"
-                                            className="h-7 w-20 px-1 py-0 text-right font-bold"
-                                            value={item.mrp || ''}
-                                            onChange={(e) => handleMrpChange(item.id!, e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <span className="text-xs font-bold text-gray-500 w-8 text-right">Price</span>
-                                        <Input
-                                            type="number"
-                                            className="h-7 w-20 px-1 py-0 text-right font-bold"
+                                            className="h-9 w-28 px-2 py-0 text-right font-bold border-blue-500"
                                             value={item.price || ''}
                                             onChange={(e) => handlePriceChange(item.id!, e.target.value)}
                                         />
@@ -522,12 +710,12 @@ const Billing = () => {
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id!, -1)}>
-                                        <Minus className="w-3 h-3" />
+                                    <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => updateQuantity(item.id!, -1)}>
+                                        <Minus className="w-4 h-4" />
                                     </Button>
                                     <span className="text-sm font-bold w-4 text-center">{item.quantity}</span>
-                                    <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => updateQuantity(item.id!, 1)}>
-                                        <Plus className="w-3 h-3" />
+                                    <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => updateQuantity(item.id!, 1)}>
+                                        <Plus className="w-4 h-4" />
                                     </Button>
                                 </div>
 
@@ -542,14 +730,18 @@ const Billing = () => {
             </div>
 
             {/* Bottom Total & Checkout */}
-            <div className="fixed bottom-16 left-0 right-0 p-4 bg-white border-t border-slate-200 shadow-md">
+            {!searchQuery && (
+                <div
+                    className="fixed left-0 right-0 p-4 bg-white border-t border-slate-200 shadow-md z-40"
+                    style={{ bottom: 'calc(80px + env(safe-area-inset-bottom))' }}
+                >
                 <div className="space-y-2 mb-3">
                     <div className="flex justify-between text-sm">
                         <span>Subtotal</span>
                         <span>₹{subTotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between items-center gap-2">
-                        <span className="text-sm">Discount</span>
+                        <span className="text-sm font-bold">Discount</span>
                         <div className="flex items-center gap-1 w-1/2">
                             <select
                                 className="h-7 text-xs border rounded bg-transparent"
@@ -561,7 +753,7 @@ const Billing = () => {
                             </select>
                             <Input
                                 type="number"
-                                className="h-7 text-right"
+                                className="h-7 text-right border-blue-500"
                                 placeholder="0"
                                 value={discount || ''}
                                 onChange={(e) => setDiscount(Number(e.target.value))}
@@ -587,6 +779,7 @@ const Billing = () => {
                     Checkout
                 </Button>
             </div>
+            )}
 
             {/* Payment Modal */}
             {showPayment && (
@@ -814,6 +1007,115 @@ const Billing = () => {
                     />
                 )
             }
+
+            {/* Held Bills Modal */}
+            {showHeldBillsModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[85vh] overflow-hidden">
+                        <div className="bg-indigo-600 text-white px-6 py-4 flex justify-between items-center">
+                            <h2 className="text-xl font-bold flex items-center gap-2">
+                                <List className="h-6 w-6" />
+                                Held Bills ({heldBills.length})
+                            </h2>
+                            <button
+                                onClick={() => setShowHeldBillsModal(false)}
+                                className="text-white hover:text-gray-200 transition-colors"
+                            >
+                                <X className="h-6 w-6" />
+                            </button>
+                        </div>
+
+                        <div className="p-6 overflow-y-auto max-h-[calc(85vh-80px)]">
+                            {heldBills.length === 0 ? (
+                                <div className="text-center text-gray-500 py-8">
+                                    <List className="h-12 w-12 mx-auto mb-3 text-gray-300" />
+                                    <p>No held bills</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    {heldBills.map((heldBill) => {
+                                        const subTotal = heldBill.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+                                        const finalTotal = heldBill.discountType === 'amount'
+                                            ? Math.max(0, subTotal - heldBill.discount)
+                                            : Math.max(0, subTotal - (subTotal * heldBill.discount / 100));
+
+                                        return (
+                                            <div
+                                                key={heldBill.id}
+                                                className="border-2 rounded-lg p-4 hover:shadow-lg transition-all hover:border-indigo-300"
+                                            >
+                                                <div className="flex justify-between items-start mb-3">
+                                                    <div className="flex-1">
+                                                        <h3 className="font-bold text-lg text-gray-800">{heldBill.customerName}</h3>
+                                                        <p className="text-sm text-gray-500 flex items-center gap-2 mt-1">
+                                                            {heldBill.paymentMode === 'cash' && '💵 Cash'}
+                                                            {heldBill.paymentMode === 'upi' && '📱 UPI'}
+                                                            {heldBill.paymentMode === 'credit' && '📝 Credit'}
+                                                            <span>•</span>
+                                                            <span>{new Date(heldBill.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-2xl font-bold text-indigo-600">
+                                                            ₹{finalTotal.toFixed(2)}
+                                                        </p>
+                                                        <p className="text-sm text-gray-500">
+                                                            {heldBill.cart.length} item{heldBill.cart.length !== 1 ? 's' : ''}
+                                                        </p>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mb-3 max-h-32 overflow-y-auto bg-gray-50 rounded p-2">
+                                                    {heldBill.cart.map((item, idx) => (
+                                                        <div key={idx} className="text-sm text-gray-700 flex justify-between py-1 border-b border-gray-200 last:border-0">
+                                                            <span className="font-medium">
+                                                                {item.name} × {item.quantity}
+                                                                {item.unit && <span className="text-xs text-blue-600 ml-1">({item.unit})</span>}
+                                                            </span>
+                                                            <span className="font-semibold">₹{(item.price * item.quantity).toFixed(2)}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+
+                                                {heldBill.discount > 0 && (
+                                                    <div className="text-sm text-gray-600 mb-3 flex justify-between bg-orange-50 p-2 rounded">
+                                                        <span>Discount:</span>
+                                                        <span className="font-semibold">
+                                                            {heldBill.discountType === 'amount'
+                                                                ? `₹${heldBill.discount.toFixed(2)}`
+                                                                : `${heldBill.discount}%`
+                                                            }
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        onClick={() => resumeHeldBill(heldBill.id)}
+                                                        className="flex-1 bg-green-500 hover:bg-green-600 text-white"
+                                                        size="sm"
+                                                    >
+                                                        <Play className="h-4 w-4 mr-2" />
+                                                        Resume Bill
+                                                    </Button>
+                                                    <Button
+                                                        onClick={() => deleteHeldBill(heldBill.id)}
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="border-red-500 text-red-500 hover:bg-red-50"
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div >
     );
 };

@@ -1,4 +1,4 @@
-package outputbooks.netlify.app;
+package freedompos.netlify.app;
 
 import com.getcapacitor.BridgeActivity;
 

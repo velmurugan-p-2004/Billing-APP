@@ -57,14 +57,17 @@ const Layout = () => {
                 <Outlet />
             </main>
 
-            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-16 z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.1)]">
+            <nav
+                className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-auto pt-3 z-50 shadow-[0_-1px_3px_rgba(0,0,0,0.1)]"
+                style={{ paddingBottom: 'calc(20px + env(safe-area-inset-bottom))' }}
+            >
                 {navItems.map((item) => (
                     <NavLink
                         key={item.path}
                         to={item.path}
                         className={({ isActive }) =>
                             cn(
-                                "flex flex-col items-center justify-center w-full h-full space-y-1 text-xs font-medium text-slate-500 transition-colors",
+                                "flex flex-col items-center justify-center w-full py-1 space-y-1 text-xs font-medium text-slate-500 transition-colors rounded-md mx-1",
                                 isActive ? "text-blue-600 bg-blue-50/50" : "hover:text-slate-900 hover:bg-slate-50"
                             )
                         }

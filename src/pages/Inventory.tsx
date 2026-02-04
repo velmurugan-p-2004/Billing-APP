@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLiveQuery } from '@/hooks/useLiveQuery';
 import { db, Item, Category } from '@/db/db';
@@ -15,7 +15,8 @@ const Inventory = () => {
     const [isAddingCategory, setIsAddingCategory] = useState(false);
     const [isScanning, setIsScanning] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
-    const [selectedCategoryFilter] = useState<number | null>(null);
+    const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+    const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<number | 'all' | null>(null);
     const [selectedProfileId, setSelectedProfileId] = useState<number | null>(() => {
         const saved = localStorage.getItem('defaultProfileId');
         return saved ? Number(saved) : null;
@@ -23,11 +24,12 @@ const Inventory = () => {
 
     const [formData, setFormData] = useState<Partial<Item>>({
         name: '',
+        englishName: '',
         sku: '',
         price: undefined,
         mrp: undefined,
         stock: undefined,
-        trackStock: true,
+        trackStock: false,
         lowStockLimit: undefined,
         variant: '',
         categoryId: undefined,
@@ -63,7 +65,7 @@ const Inventory = () => {
             }
 
             // Filter by category if selected
-            if (selectedCategoryFilter) {
+            if (selectedCategoryFilter && selectedCategoryFilter !== 'all') {
                 query = query.filter(item => item.categoryId === selectedCategoryFilter);
             }
 
@@ -80,6 +82,13 @@ const Inventory = () => {
         },
         [searchQuery, selectedCategoryFilter, selectedProfileId]
     );
+
+    // Set default category to first category when categories load or profile changes
+    useEffect(() => {
+        if (categories && categories.length > 0 && selectedCategoryFilter === null) {
+            setSelectedCategoryFilter(categories[0].id!);
+        }
+    }, [categories, selectedCategoryFilter]);
 
     const handleScan = (code: string) => {
         setFormData(prev => ({ ...prev, sku: code }));
@@ -128,10 +137,31 @@ const Inventory = () => {
             return;
         }
 
+        // Check for duplicate SKU
+        const existingCategory = await db.categories
+            .filter(c => 
+                c.sku === categoryFormData.sku && 
+                c.id !== editingCategoryId &&
+                c.profileId === categoryFormData.profileId
+            )
+            .first();
+        
+        if (existingCategory) {
+            alert(`SKU "${categoryFormData.sku}" is already used by category "${existingCategory.name}". Please use a different SKU.`);
+            return;
+        }
+
         try {
-            const newCategoryId = await db.categories.add(categoryFormData as Category);
-            // Set the newly created category as selected
-            setFormData({ ...formData, categoryId: newCategoryId as number });
+            if (editingCategoryId) {
+                // Update existing category
+                await db.categories.update(editingCategoryId, categoryFormData as Category);
+                setEditingCategoryId(null);
+            } else {
+                // Add new category
+                const newCategoryId = await db.categories.add(categoryFormData as Category);
+                // Set the newly created category as selected
+                setFormData({ ...formData, categoryId: newCategoryId as number });
+            }
             // Reset category form
             setCategoryFormData({
                 name: '',
@@ -143,6 +173,15 @@ const Inventory = () => {
         } catch (error) {
             console.error('Error saving category:', error);
             alert(`Failed to save category: ${error instanceof Error ? error.message : 'Unknown error'}. Try reloading the app.`);
+        }
+    };
+
+    const handleEditCategory = (categoryId: number) => {
+        const category = categories?.find(c => c.id === categoryId);
+        if (category) {
+            setCategoryFormData(category);
+            setEditingCategoryId(categoryId);
+            setIsAddingCategory(true);
         }
     };
 
@@ -178,6 +217,7 @@ const Inventory = () => {
     const resetForm = () => {
         setFormData({
             name: '',
+            englishName: '',
             sku: '',
             price: undefined,
             mrp: undefined,
@@ -192,7 +232,7 @@ const Inventory = () => {
     };
 
     return (
-        <div className="p-4 pb-24 max-w-md mx-auto relative min-h-screen">
+        <div className="p-4 pb-24 w-full lg:max-w-7xl xl:max-w-full mx-auto relative min-h-screen lg:px-6 xl:px-8">
             <div className="flex justify-between items-center mb-4 gap-2">
                 <div className="flex items-center gap-2">
                     <h1 className="text-2xl font-bold">{t('inventory')}</h1>
@@ -227,19 +267,61 @@ const Inventory = () => {
                 />
             </div>
 
+            {/* Horizontal Category Filter */}
+            {categories && categories.length > 0 && (
+                <div className="mb-4 overflow-x-auto">
+                    <div className="flex gap-2 pb-2">
+                        <Button
+                            size="sm"
+                            variant={selectedCategoryFilter === 'all' ? 'default' : 'outline'}
+                            onClick={() => setSelectedCategoryFilter('all')}
+                            className="whitespace-nowrap"
+                        >
+                            All Products
+                        </Button>
+                        {categories
+                            .sort((a, b) => {
+                                const aNum = parseInt(a.sku);
+                                const bNum = parseInt(b.sku);
+                                if (!isNaN(aNum) && !isNaN(bNum)) {
+                                    return aNum - bNum;
+                                }
+                                return a.sku.localeCompare(b.sku, undefined, { numeric: true, sensitivity: 'base' });
+                            })
+                            .map(category => (
+                                <Button
+                                    key={category.id}
+                                    size="sm"
+                                    variant={selectedCategoryFilter === category.id ? 'default' : 'outline'}
+                                    onClick={() => setSelectedCategoryFilter(category.id!)}
+                                    className="whitespace-nowrap"
+                                >
+                                    {category.name} ({category.sku})
+                                </Button>
+                            ))}
+                    </div>
+                </div>
+            )}
+
             <div className="space-y-2">
                 {items?.map((item) => (
                     <Card key={item.id} className="overflow-hidden">
                         <CardContent className="p-3 flex justify-between items-center">
                             <div>
-                                <div className="font-semibold">{item.name}</div>
+                                <div className="font-semibold">
+                                    {item.name}
+                                    {item.unit && <span className="text-xs text-blue-600 ml-2">({item.unit})</span>}
+                                </div>
+                                {item.englishName && (
+                                    <div className="text-xs text-gray-400 italic">Print: {item.englishName}</div>
+                                )}
                                 <div className="text-xs text-gray-500">SKU: {item.sku}</div>
                                 <div className="text-sm mt-1">
                                     ₹{item.price} <span className="text-gray-400 line-through text-xs">₹{item.mrp}</span>
                                 </div>
                             </div>
                             <div className="flex flex-col items-end gap-2">
-                                {item.trackStock !== false && (
+                                {item.trackStock === true && (
                                     <div className={`text-sm font-bold ${item.stock < 5 ? 'text-red-500' : 'text-green-600'}`}>
                                         Stk: {item.stock}
                                     </div>
@@ -263,15 +345,15 @@ const Inventory = () => {
 
             {/* Add/Edit Overlay */}
             {isAdding && (
-                <div className="fixed inset-0 z-50 bg-white flex flex-col h-[100dvh]">
-                    <div className="flex-none flex justify-between items-center p-4 border-b">
+                <div className="fixed inset-0 z-[60] bg-white flex flex-col" style={{ height: '100dvh' }}>
+                    <div className="flex-none flex justify-between items-center p-4 border-b bg-white">
                         <h2 className="text-xl font-bold">{editingId ? 'Edit Item' : t('add_item')}</h2>
                         <Button variant="ghost" size="icon" onClick={resetForm}>
                             <X className="w-6 h-6" />
                         </Button>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto p-4 space-y-4" style={{ paddingBottom: '100px' }}>
                         <div>
                             <label className="text-sm font-medium">Business Profile</label>
                             <select
@@ -295,6 +377,7 @@ const Inventory = () => {
                                     onChange={e => {
                                         if (e.target.value === 'add_new') {
                                             setCategoryFormData(prev => ({ ...prev, profileId: formData.profileId }));
+                                            setEditingCategoryId(null);
                                             setIsAddingCategory(true);
                                         } else {
                                             setFormData({ ...formData, categoryId: Number(e.target.value) });
@@ -302,11 +385,31 @@ const Inventory = () => {
                                     }}
                                 >
                                     <option value="">Select Category</option>
-                                    {categories?.filter(c => c.profileId === formData.profileId).map(c => (
-                                        <option key={c.id} value={c.id}>{c.name} ({c.sku})</option>
-                                    ))}
+                                    {categories?.filter(c => c.profileId === formData.profileId)
+                                        .sort((a, b) => {
+                                            // Natural sort for numeric SKUs
+                                            const aNum = parseInt(a.sku);
+                                            const bNum = parseInt(b.sku);
+                                            if (!isNaN(aNum) && !isNaN(bNum)) {
+                                                return aNum - bNum;
+                                            }
+                                            return a.sku.localeCompare(b.sku, undefined, { numeric: true, sensitivity: 'base' });
+                                        })
+                                        .map(c => (
+                                            <option key={c.id} value={c.id}>{c.name} ({c.sku})</option>
+                                        ))}
                                     <option value="add_new" className="font-bold text-blue-600">+ Add New Category</option>
                                 </select>
+                                <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => formData.categoryId && handleEditCategory(formData.categoryId)}
+                                    disabled={!formData.categoryId}
+                                    title="Edit Selected Category"
+                                    type="button"
+                                >
+                                    <Edit className="w-4 h-4" />
+                                </Button>
                                 <Button
                                     variant="destructive"
                                     size="icon"
@@ -322,11 +425,37 @@ const Inventory = () => {
                         </div>
 
                         <div>
-                            <label className="text-sm font-medium">{t('name')}</label>
+                            <label className="text-sm font-medium">{t('name')} (Tamil)</label>
+                            <div className="flex gap-2">
+                                <Input
+                                    value={formData.name}
+                                    onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                    placeholder="தமிழ் பெயர்"
+                                    className="flex-1"
+                                />
+                                {profiles?.find(p => p.id === formData.profileId)?.enableUnits && (
+                                    <select
+                                        className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 w-24"
+                                        value={formData.unit || ''}
+                                        onChange={e => setFormData({ ...formData, unit: e.target.value })}
+                                    >
+                                        <option value="">Unit</option>
+                                        {profiles?.find(p => p.id === formData.profileId)?.units?.map(unit => (
+                                            <option key={unit} value={unit}>{unit}</option>
+                                        ))}
+                                    </select>
+                                )}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="text-sm font-medium">English Name (for printing)</label>
                             <Input
-                                value={formData.name}
-                                onChange={e => setFormData({ ...formData, name: e.target.value })}
+                                value={formData.englishName || ''}
+                                onChange={e => setFormData({ ...formData, englishName: e.target.value })}
+                                placeholder="English name for thermal printer"
                             />
+                            <p className="text-xs text-gray-500 mt-1">This name will appear on thermal receipts</p>
                         </div>
 
                         <div>
@@ -375,7 +504,7 @@ const Inventory = () => {
                                 type="checkbox"
                                 id="trackStock"
                                 className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
-                                checked={formData.trackStock !== false}
+                                checked={formData.trackStock === true}
                                 onChange={e => setFormData({ ...formData, trackStock: e.target.checked })}
                             />
                             <label htmlFor="trackStock" className="text-sm font-medium cursor-pointer">
@@ -383,7 +512,7 @@ const Inventory = () => {
                             </label>
                         </div>
 
-                        {formData.trackStock !== false && (
+                        {formData.trackStock === true && (
                             <>
                                 <div>
                                     <label className="text-sm font-medium">{t('stock')}</label>
@@ -405,8 +534,11 @@ const Inventory = () => {
                                 </div>
                             </>
                         )}
+                    </div>
 
-                        <div className="flex justify-end gap-3 mt-6 pb-6">
+                    {/* Fixed bottom button bar */}
+                    <div className="sticky bottom-0 left-0 right-0 border-t bg-white p-4 shadow-[0_-4px_12px_rgba(0,0,0,0.1)] z-10">
+                        <div className="flex justify-end gap-3">
                             <Button variant="outline" onClick={resetForm}>
                                 Cancel
                             </Button>
@@ -427,14 +559,17 @@ const Inventory = () => {
                 )
             }
 
-            {/* Quick Add Category Modal */}
+            {/* Quick Add/Edit Category Modal */}
             {
                 isAddingCategory && (
                     <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4">
                         <div className="bg-white rounded-lg w-full max-w-md p-6 space-y-4">
                             <div className="flex justify-between items-center">
-                                <h3 className="text-lg font-bold">Add New Category</h3>
-                                <Button variant="ghost" size="icon" onClick={() => setIsAddingCategory(false)}>
+                                <h3 className="text-lg font-bold">{editingCategoryId ? 'Edit Category' : 'Add New Category'}</h3>
+                                <Button variant="ghost" size="icon" onClick={() => {
+                                    setIsAddingCategory(false);
+                                    setEditingCategoryId(null);
+                                }}>
                                     <X className="w-5 h-5" />
                                 </Button>
                             </div>
@@ -452,6 +587,8 @@ const Inventory = () => {
                                 <div>
                                     <label className="text-sm font-medium">Category SKU *</label>
                                     <Input
+                                        type="tel"
+                                        inputMode="numeric"
                                         placeholder="e.g., TSH-001"
                                         value={categoryFormData.sku}
                                         onChange={e => setCategoryFormData({ ...categoryFormData, sku: e.target.value })}

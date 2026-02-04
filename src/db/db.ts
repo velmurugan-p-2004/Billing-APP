@@ -10,7 +10,8 @@ export interface Category {
 
 export interface Item {
     id?: number;
-    name: string;
+    name: string;           // Tamil name (displayed in UI)
+    englishName?: string;   // English name (used for thermal printing)
     categoryId?: number;    // Link to category (optional for backward compatibility)
     sku?: string;           // Optional individual SKU (for backward compatibility)
     price: number;          // Selling Price
@@ -20,6 +21,7 @@ export interface Item {
     lowStockLimit?: number;
     variant?: string;       // e.g., "Red-M", "Blue-L" (optional)
     profileId?: number;     // Linked Business Profile ID
+    unit?: string;          // Unit of measurement (e.g., "kg", "pieces", "liters")
 }
 
 export interface PartyTransaction {
@@ -68,6 +70,12 @@ export interface Profile {
     upiId: string;
     logo?: string; // Base64
     linkedGoogleEmail?: string; // Linked Google Account Email
+    enableUnits?: boolean; // Enable unit selection for items
+    units?: string[]; // Available units (e.g., ["kg", "pieces", "liters", "grams"])
+    enableMRP?: boolean; // Enable MRP input in billing
+    autoPriceEntry?: boolean; // Auto-focus price input when item is added to cart
+    defaultDiscountType?: 'amount' | 'percentage'; // Default discount type
+    defaultDiscountValue?: number; // Default discount value
 }
 
 export class BillingDB extends Dexie {
@@ -134,6 +142,17 @@ export class BillingDB extends Dexie {
         // Version 5 - Add App Config (for Directory Handles etc)
         this.version(5).stores({
             items: '++id, name, sku, categoryId, stock, lowStockLimit, profileId',
+            bills: '++id, billNo, date, customerName, profileId, partyId',
+            profiles: '++id, businessName',
+            categories: '++id, name, sku, profileId',
+            parties: '++id, name, mobile, profileId',
+            partyTransactions: '++id, partyId, date, type, billId, profileId',
+            appConfig: 'key'
+        });
+
+        // Version 6 - Add englishName to items for thermal printing
+        this.version(6).stores({
+            items: '++id, name, englishName, sku, categoryId, stock, lowStockLimit, profileId',
             bills: '++id, billNo, date, customerName, profileId, partyId',
             profiles: '++id, businessName',
             categories: '++id, name, sku, profileId',
