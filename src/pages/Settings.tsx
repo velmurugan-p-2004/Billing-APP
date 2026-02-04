@@ -388,6 +388,7 @@ const Settings = () => {
                                 { id: 'showPhone', label: 'Show Phone Number' },
                                 { id: 'showLogo', label: 'Show Logo' },
                                 { id: 'showFooter', label: 'Show Footer' },
+                                { id: 'showMrp', label: 'Show MRP Column' },
                                 { id: 'showSavings', label: 'Show MRP Savings' },
                             ].map((opt) => (
                                 <div key={opt.id} className="flex items-center justify-between p-2 border rounded bg-slate-50">

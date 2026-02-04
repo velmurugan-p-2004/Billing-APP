@@ -4,7 +4,7 @@ import { db, Party } from '@/db/db';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Plus, Search, User, Edit, Phone, FileText } from 'lucide-react';
+import { Plus, Search, User, Edit, Phone, FileText, Trash2 } from 'lucide-react';
 
 const PartiesPage = () => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -70,6 +70,12 @@ const PartiesPage = () => {
     const handleEdit = (party: Party) => {
         setCurrentParty(party);
         setIsEditing(true);
+    };
+
+    const handleDeleteParty = async (partyId: number) => {
+        if (confirm('Are you sure you want to delete this party? This action cannot be undone.')) {
+            await db.parties.delete(partyId);
+        }
     };
 
     const [showTransactionModal, setShowTransactionModal] = useState(false);
@@ -186,6 +192,9 @@ const PartiesPage = () => {
                                     </Button>
                                     <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleEdit(party)}>
                                         <Edit className="w-3 h-3" />
+                                    </Button>
+                                    <Button size="sm" variant="outline" className="h-7 text-xs text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => handleDeleteParty(party.id!)}>
+                                        <Trash2 className="w-3 h-3" />
                                     </Button>
                                 </div>
                             </div>

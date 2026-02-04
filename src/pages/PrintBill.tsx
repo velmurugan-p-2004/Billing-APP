@@ -95,21 +95,21 @@ const PrintBill = () => {
                             <div className="flex font-bold text-[11px]">
                                 <span className="w-6">Qty</span>
                                 <span className="flex-1">Item</span>
-                                <span className="w-10 text-right">MRP</span>
+                                {localStorage.getItem('showMrp') !== 'false' && <span className="w-10 text-right">MRP</span>}
                                 <span className="w-12 text-right">Amt</span>
                             </div>
                             {bill.items.map((item, i) => (
                                 <div key={i} className="flex items-center text-[11px]">
                                     <span className="w-6">{item.quantity}</span>
                                     <span className="flex-1 truncate">{item.name}</span>
-                                    <span className="w-10 text-right text-gray-500">{item.mrp}</span>
+                                    {localStorage.getItem('showMrp') !== 'false' && <span className="w-10 text-right text-gray-500">{item.mrp}</span>}
                                     <span className="w-12 text-right font-bold">{(item.price * item.quantity).toFixed(0)}</span>
                                 </div>
                             ))}
                             <div className="border-t border-black border-dashed mt-1 pt-1 flex text-[11px] font-bold">
                                 <span className="w-6">{totalQty}</span>
                                 <span className="flex-1 text-right pr-2">Total</span>
-                                <span className="w-10 text-right">{totalMrp}</span>
+                                {localStorage.getItem('showMrp') !== 'false' && <span className="w-10 text-right">{totalMrp}</span>}
                                 <span className="w-12 text-right">{subTotal.toFixed(0)}</span>
                             </div>
                             <div className="border-b border-black my-1 border-dashed"></div>
@@ -224,7 +224,7 @@ const PrintBill = () => {
                         <tr key={i}>
                             <td className="p-3 font-medium">
                                 {item.name}
-                                {item.mrp > item.price && (
+                                {item.mrp > item.price && localStorage.getItem('showMrp') !== 'false' && (
                                     <div className="text-xs text-green-600">MRP: ₹{item.mrp}</div>
                                 )}
                             </td>
@@ -245,10 +245,12 @@ const PrintBill = () => {
 
             <div className="flex justify-end">
                 <div className="w-64 space-y-2">
-                    <div className="flex justify-between text-gray-500 font-medium pb-2 border-b">
-                        <span>Total MRP</span>
-                        <span className="line-through decoration-red-500">₹{bill.items.reduce((acc, i) => acc + (i.mrp * i.quantity), 0).toFixed(2)}</span>
-                    </div>
+                    {localStorage.getItem('showMrp') !== 'false' && (
+                        <div className="flex justify-between text-gray-500 font-medium pb-2 border-b">
+                            <span>Total MRP</span>
+                            <span className="line-through decoration-red-500">₹{bill.items.reduce((acc, i) => acc + (i.mrp * i.quantity), 0).toFixed(2)}</span>
+                        </div>
+                    )}
 
                     {localStorage.getItem('showSavings') !== 'false' && (
                         <div className="flex justify-between text-green-600 font-medium">

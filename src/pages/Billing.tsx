@@ -573,11 +573,17 @@ const Billing = () => {
                         <span>₹{totalAmount.toFixed(2)}</span>
                     </div>
                 </div>
-                <Button className="w-full" size="lg" disabled={cart.length === 0} onClick={() => {
-                    setTransactionRef(`Bill-${Date.now()}`);
-                    setShowPayment(true);
-                    setPaidAmount(0);
-                }}>
+                <Button
+                    className="w-full text-white hover:opacity-90"
+                    size="lg"
+                    disabled={cart.length === 0}
+                    style={{ backgroundColor: 'rgb(100 198 58 / 89%)' }}
+                    onClick={() => {
+                        setTransactionRef(`Bill-${Date.now()}`);
+                        setShowPayment(true);
+                        setPaidAmount(0);
+                    }}
+                >
                     Checkout
                 </Button>
             </div>
@@ -764,8 +770,19 @@ const Billing = () => {
                         )}
 
                         <div className="flex gap-2 pt-2">
-                            <Button variant="outline" className="flex-1" onClick={() => setShowPayment(false)}>Cancel</Button>
-                            <Button className="flex-1" onClick={handleSaveBill}>Confirm & Save</Button>
+                            <Button
+                                className="flex-1 bg-red-500 hover:bg-red-600 text-white"
+                                onClick={() => setShowPayment(false)}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                className="flex-1 text-white hover:opacity-90"
+                                style={{ backgroundColor: 'rgb(100 198 58 / 89%)' }}
+                                onClick={handleSaveBill}
+                            >
+                                Confirm & Save
+                            </Button>
                         </div>
                     </div>
                 </div>
