@@ -902,14 +902,30 @@ const Billing = () => {
                                                 <div className="flex items-center justify-between p-2 bg-white border rounded">
                                                     <div>
                                                         <div className="font-bold text-sm">{selectedParty.name}</div>
-                                                        <div className="text-xs text-gray-500">Bal: ₹{selectedParty.balance}</div>
+                                                        <div className="text-xs text-gray-500">Previous Balance: ₹{selectedParty.balance.toFixed(2)}</div>
                                                     </div>
                                                     <Button size="sm" variant="ghost" onClick={() => setSelectedParty(null)}>Change</Button>
                                                 </div>
 
+                                                {/* Bill Summary */}
+                                                <div className="p-3 bg-blue-50 border border-blue-200 rounded space-y-1">
+                                                    <div className="flex justify-between text-xs">
+                                                        <span className="text-gray-600">Current Bill:</span>
+                                                        <span className="font-semibold">₹{totalAmount.toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-xs">
+                                                        <span className="text-gray-600">Previous Balance:</span>
+                                                        <span className="font-semibold text-red-600">₹{selectedParty.balance.toFixed(2)}</span>
+                                                    </div>
+                                                    <div className="flex justify-between text-xs pt-1 border-t border-blue-300">
+                                                        <span className="font-bold text-gray-700">Total Outstanding:</span>
+                                                        <span className="font-bold text-blue-700">₹{(totalAmount + selectedParty.balance).toFixed(2)}</span>
+                                                    </div>
+                                                </div>
+
                                                 <div className="flex items-center gap-2">
                                                     <div className="flex-1 space-y-1">
-                                                        <label className="text-xs font-bold text-gray-700">Paid Amount</label>
+                                                        <label className="text-xs font-bold text-gray-700">Paid Now</label>
                                                         <Input
                                                             type="number"
                                                             placeholder="0"
@@ -919,9 +935,13 @@ const Billing = () => {
                                                         />
                                                     </div>
                                                     <div className="flex-1 space-y-1">
-                                                        <label className="text-xs font-bold text-gray-700">To Credit</label>
-                                                        <div className="h-9 px-3 py-2 bg-slate-100 border rounded text-sm font-medium text-red-600">
-                                                            ₹{(Math.max(0, totalAmount - paidAmount)).toFixed(2)}
+                                                        <label className="text-xs font-bold text-gray-700">New Balance</label>
+                                                        <div className={`h-9 px-3 py-2 border rounded text-sm font-medium ${
+                                                            (selectedParty.balance + totalAmount - paidAmount) > 0 
+                                                                ? 'bg-red-50 text-red-600 border-red-200' 
+                                                                : 'bg-green-50 text-green-600 border-green-200'
+                                                        }`}>
+                                                            ₹{(selectedParty.balance + totalAmount - paidAmount).toFixed(2)}
                                                         </div>
                                                     </div>
                                                 </div>

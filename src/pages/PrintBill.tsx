@@ -147,7 +147,7 @@ const PrintBill = () => {
                                     </div>
                                     <div className="flex justify-between text-xs font-bold">
                                         <span>Bill Due</span>
-                                        <span>₹{(bill.totalAmount - (bill.paidAmount || 0)).toFixed(0)}</span>
+                                        <span>₹{Math.max(0, bill.totalAmount - (bill.paidAmount || 0)).toFixed(0)}</span>
                                     </div>
                                     {party && (
                                         <div className="flex justify-between text-sm font-bold border-t border-dashed pt-1">
@@ -307,7 +307,7 @@ const PrintBill = () => {
                             </div>
                             <div className="flex justify-between font-bold text-red-600">
                                 <span>Balance In Bill</span>
-                                <span>₹{(bill.totalAmount - (bill.paidAmount || 0)).toFixed(2)}</span>
+                                <span>₹{Math.max(0, bill.totalAmount - (bill.paidAmount || 0)).toFixed(2)}</span>
                             </div>
                             {party && (
                                 <div className="flex justify-between font-bold border-t border-gray-300 pt-1 mt-1">
