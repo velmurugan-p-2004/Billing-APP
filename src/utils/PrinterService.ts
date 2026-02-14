@@ -246,15 +246,18 @@ export const PrinterService = {
                         .filter(b => b.paymentMode === 'credit' && b.id !== bill.id)
                         .reduce((sum, b) => sum + (b.totalAmount - (b.paidAmount || 0)), 0);
                     
-                    // Calculate balance from manual transactions (payments reduce, charges increase)
-                    const transactionsBalance = partyTransactions.reduce((sum, t) => {
-                        if (t.type === 'PAYMENT') {
-                            return sum - t.amount;
-                        } else if (t.type === 'CHARGE') {
-                            return sum + t.amount;
-                        }
-                        return sum;
-                    }, 0);
+                    // Calculate balance from manual transactions only (not bill-linked)
+                    // Exclude all transactions with billId as they're already in billsBalance
+                    const transactionsBalance = partyTransactions
+                        .filter(t => !t.billId) // Only manual transactions without billId
+                        .reduce((sum, t) => {
+                            if (t.type === 'PAYMENT') {
+                                return sum - t.amount;
+                            } else if (t.type === 'CHARGE') {
+                                return sum + t.amount;
+                            }
+                            return sum;
+                        }, 0);
                     
                     // Total previous balance = bills balance + transactions balance
                     const previousBalance = billsBalance + transactionsBalance;
@@ -266,7 +269,7 @@ export const PrinterService = {
                     encoder.textLine('-'.repeat(maxChars));
                     
                     // Previous Balance
-                    const prevBalanceLine = 'Previous Balance'.padEnd(maxChars - 10) + `Rs${previousBalance.toFixed(0)}`.padStart(10);
+                    const prevBalanceLine = 'Previous Balance'.padEnd(maxChars - 10) + `Rs ${previousBalance.toFixed(0)}`.padStart(10);
                     if (itemsFontSize === 'large') encoder.size('LARGE');
                     encoder.textLine(prevBalanceLine);
                     encoder.size('NORMAL');
@@ -275,7 +278,7 @@ export const PrinterService = {
                     encoder.bold(true).textLine('='.repeat(maxChars));
                     
                     // Net Balance (bold)
-                    const netBalanceLine = 'Net Balance'.padEnd(maxChars - 10) + `Rs${netBalance.toFixed(0)}`.padStart(10);
+                    const netBalanceLine = 'Net Balance'.padEnd(maxChars - 10) + `Rs ${netBalance.toFixed(0)}`.padStart(10);
                     if (itemsFontSize === 'large') encoder.size('LARGE');
                     encoder.textLine(netBalanceLine);
                     encoder.size('NORMAL');

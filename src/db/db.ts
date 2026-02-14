@@ -37,6 +37,7 @@ export interface PartyTransaction {
 
 export interface BillItem extends Item {
     quantity: number;
+    cartId?: number; // Unique identifier for cart items to handle duplicates
 }
 
 export interface Party {
@@ -74,6 +75,7 @@ export interface Profile {
     units?: string[]; // Available units (e.g., ["kg", "pieces", "liters", "grams"])
     enableMRP?: boolean; // Enable MRP input in billing
     autoPriceEntry?: boolean; // Auto-focus price input when item is added to cart
+    allowDuplicateItems?: boolean; // Allow same item to be added multiple times as separate entries
     defaultDiscountType?: 'amount' | 'percentage'; // Default discount type
     defaultDiscountValue?: number; // Default discount value
 }

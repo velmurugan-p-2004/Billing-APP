@@ -28,6 +28,7 @@ const Billing = () => {
         const localISOTime = new Date(now.getTime() - offset).toISOString().slice(0, 16);
         return localISOTime;
     });
+    const [isDateTimeManuallyEdited, setIsDateTimeManuallyEdited] = useState(false);
 
     const [paymentMode, setPaymentMode] = useState<'cash' | 'upi' | 'credit'>('cash');
     const [lastBillId, setLastBillId] = useState<number | null>(null);
@@ -125,6 +126,20 @@ const Billing = () => {
         }
     }, [profiles, selectedProfileId]);
 
+    // Auto-update bill date/time every second (unless manually edited)
+    useEffect(() => {
+        if (isDateTimeManuallyEdited) return; // Don't auto-update if user manually changed it
+        
+        const interval = setInterval(() => {
+            const now = new Date();
+            const offset = now.getTimezoneOffset() * 60000;
+            const localISOTime = new Date(now.getTime() - offset).toISOString().slice(0, 16);
+            setBillDateTime(localISOTime);
+        }, 1000); // Update every second
+        
+        return () => clearInterval(interval);
+    }, [isDateTimeManuallyEdited]);
+
     // Apply default discount from selected profile (only once when profile changes)
     useEffect(() => {
         if (selectedProfile?.defaultDiscountValue && selectedProfile.defaultDiscountValue > 0) {
@@ -151,12 +166,19 @@ const Billing = () => {
 
     const addToCart = (item: Item) => {
         setCart(prev => {
-            const existing = prev.find(i => i.id === item.id);
-            if (existing) {
-                return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+            // Check if duplicate items are allowed in profile settings
+            const allowDuplicates = selectedProfile?.allowDuplicateItems || false;
+            
+            if (!allowDuplicates) {
+                // Default behavior: increase quantity if item exists
+                const existing = prev.find(i => i.id === item.id);
+                if (existing) {
+                    return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i);
+                }
             }
+            // Add as new item (either duplicates allowed or item doesn't exist)
             setLastAddedItemId(item.id!);
-            return [...prev, { ...item, quantity: 1 }];
+            return [...prev, { ...item, quantity: 1, cartId: Date.now() + Math.random() }];
         });
         setSearchQuery('');
     };
@@ -190,9 +212,9 @@ const Billing = () => {
         }
     };
 
-    const updateQuantity = (id: number, delta: number) => {
+    const updateQuantity = (cartId: number, delta: number) => {
         setCart(prev => prev.map(item => {
-            if (item.id === id) {
+            if (item.cartId === cartId) {
                 const newQty = Math.max(1, item.quantity + delta);
                 return { ...item, quantity: newQty };
             }
@@ -200,8 +222,8 @@ const Billing = () => {
         }));
     };
 
-    const removeItem = (id: number) => {
-        setCart(prev => prev.filter(i => i.id !== id));
+    const removeItem = (cartId: number) => {
+        setCart(prev => prev.filter(i => i.cartId !== cartId));
     };
 
     const [discount, setDiscount] = useState<number>(0);
@@ -225,30 +247,30 @@ const Billing = () => {
         return `upi://pay?pa=${pa}&pn=${pn}&am=${am}&tn=${tn}`;
     };
 
-    const handlePriceChange = (id: number, newPrice: string) => {
+    const handlePriceChange = (cartId: number, newPrice: string) => {
         // Allow empty string to let user clear input
         if (newPrice === '') {
-            setCart(prev => prev.map(item => item.id === id ? { ...item, price: 0 } : item));
+            setCart(prev => prev.map(item => item.cartId === cartId ? { ...item, price: 0 } : item));
             return;
         }
         const price = parseFloat(newPrice);
         if (isNaN(price)) return; // Allow negative? Probably not.
 
         setCart(prev => prev.map(item =>
-            item.id === id ? { ...item, price } : item
+            item.cartId === cartId ? { ...item, price } : item
         ));
     };
 
-    const handleMrpChange = (id: number, newMrp: string) => {
+    const handleMrpChange = (cartId: number, newMrp: string) => {
         if (newMrp === '') {
-            setCart(prev => prev.map(item => item.id === id ? { ...item, mrp: 0 } : item));
+            setCart(prev => prev.map(item => item.cartId === cartId ? { ...item, mrp: 0 } : item));
             return;
         }
         const mrp = parseFloat(newMrp);
         if (isNaN(mrp)) return;
 
         setCart(prev => prev.map(item =>
-            item.id === id ? { ...item, mrp } : item
+            item.cartId === cartId ? { ...item, mrp } : item
         ));
     };
 
@@ -277,7 +299,8 @@ const Billing = () => {
         setCustomerName('');
         setSelectedParty(null);
         setPaymentMode('cash');
-        setDiscount(0);
+        setDiscount(selectedProfile?.defaultDiscountValue || 0);
+        setDiscountType(selectedProfile?.defaultDiscountType || 'amount');
         setSearchQuery('');
         setPaidAmount(0);
         
@@ -518,7 +541,9 @@ const Billing = () => {
         const now = new Date();
         const offset = now.getTimezoneOffset() * 60000;
         setBillDateTime(new Date(now.getTime() - offset).toISOString().slice(0, 16)); // Reset to current local time
-        setDiscount(0);
+        setIsDateTimeManuallyEdited(false); // Resume auto-updating time
+        setDiscount(selectedProfile?.defaultDiscountValue || 0);
+        setDiscountType(selectedProfile?.defaultDiscountType || 'amount');
         setEditingBillId(null);
         setShowPayment(false);
         // Reset Credit State
@@ -598,7 +623,10 @@ const Billing = () => {
                     <Input
                         type="datetime-local"
                         value={billDateTime}
-                        onChange={e => setBillDateTime(e.target.value)}
+                        onChange={e => {
+                            setBillDateTime(e.target.value);
+                            setIsDateTimeManuallyEdited(true); // Stop auto-updating when manually edited
+                        }}
                         className="text-sm"
                     />
                 </div>
@@ -664,14 +692,14 @@ const Billing = () => {
             {/* Cart Items */}
             <div className="flex-1 overflow-y-auto space-y-2 mb-40">
                 {cart.map((item, index) => (
-                    <Card key={index} className="p-2">
+                    <Card key={item.cartId || index} className="p-2">
                         <div className="flex flex-col gap-2">
                             <div className="flex justify-between items-start">
                                 <div className="font-medium">
                                     {item.name}
                                     {item.unit && <span className="text-xs text-blue-600 ml-1">({item.unit})</span>}
                                 </div>
-                                <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => removeItem(item.id!)}>
+                                <Button size="icon" variant="ghost" className="h-6 w-6 text-red-500" onClick={() => removeItem(item.cartId!)}>
                                     <Trash2 className="w-3 h-3" />
                                 </Button>
                             </div>
@@ -685,7 +713,7 @@ const Billing = () => {
                                                 type="number"
                                                 className="h-9 w-28 px-2 py-0 text-right font-bold border-blue-500"
                                                 value={item.mrp || ''}
-                                                onChange={(e) => handleMrpChange(item.id!, e.target.value)}
+                                                onChange={(e) => handleMrpChange(item.cartId!, e.target.value)}
                                             />
                                         </div>
                                     )}
@@ -704,17 +732,17 @@ const Billing = () => {
                                             type="number"
                                             className="h-9 w-28 px-2 py-0 text-right font-bold border-blue-500"
                                             value={item.price || ''}
-                                            onChange={(e) => handlePriceChange(item.id!, e.target.value)}
+                                            onChange={(e) => handlePriceChange(item.cartId!, e.target.value)}
                                         />
                                     </div>
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => updateQuantity(item.id!, -1)}>
+                                    <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => updateQuantity(item.cartId!, -1)}>
                                         <Minus className="w-4 h-4" />
                                     </Button>
                                     <span className="text-sm font-bold w-4 text-center">{item.quantity}</span>
-                                    <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => updateQuantity(item.id!, 1)}>
+                                    <Button size="icon" variant="ghost" className="h-9 w-9" onClick={() => updateQuantity(item.cartId!, 1)}>
                                         <Plus className="w-4 h-4" />
                                     </Button>
                                 </div>

@@ -105,6 +105,7 @@ const Settings = () => {
             units: newProfile.units || ['pieces', 'kg', 'grams', 'liters'],
             enableMRP: newProfile.enableMRP || false,
             autoPriceEntry: newProfile.autoPriceEntry || false,
+            allowDuplicateItems: newProfile.allowDuplicateItems || false,
             defaultDiscountType: newProfile.defaultDiscountType || 'amount',
             defaultDiscountValue: newProfile.defaultDiscountValue || 0
         } as Profile;
@@ -638,6 +639,25 @@ const Settings = () => {
                                     />
                                     <label htmlFor="autoPriceEntry" className="text-sm font-medium cursor-pointer">
                                         Auto-focus Price Input (opens keypad when item added)
+                                    </label>
+                                </div>
+                            </div>
+
+                            {/* Allow Duplicate Items Configuration */}
+                            <div className="space-y-3 p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="allowDuplicateItems"
+                                        className="w-4 h-4 text-purple-600 bg-gray-100 border-gray-300 rounded focus:ring-purple-500"
+                                        checked={newProfile.allowDuplicateItems || false}
+                                        onChange={e => setNewProfile({ 
+                                            ...newProfile, 
+                                            allowDuplicateItems: e.target.checked
+                                        })}
+                                    />
+                                    <label htmlFor="allowDuplicateItems" className="text-sm font-medium cursor-pointer">
+                                        Allow Duplicate Items in Cart (add same item as separate entry)
                                     </label>
                                 </div>
                             </div>
